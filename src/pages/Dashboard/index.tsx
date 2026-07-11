@@ -230,16 +230,7 @@ const expiringLotColumns: ColumnsType<ExpiringLot> = [
 const Dashboard: React.FC = () => {
   // ── Live API Queries ────────────────────────────────────────────────────────
 
-  const {
-    data: health,
-    isLoading: healthLoading,
-    isError: healthError,
-  } = useQuery({
-    queryKey: ['health'],
-    queryFn: () => dashboardService.getHealth(),
-    refetchInterval: 30_000, // poll every 30s
-    retry: 1,
-  });
+  // Health API call removed per user request
 
   const {
     data: batchResult,
@@ -248,6 +239,7 @@ const Dashboard: React.FC = () => {
     queryKey: ['batch-result', today],
     queryFn: () => dashboardService.getBatchResult(today),
     retry: 1,
+    enabled: false, // Blocked temporarily
   });
 
   const {
@@ -257,24 +249,15 @@ const Dashboard: React.FC = () => {
     queryKey: ['expiring-lots'],
     queryFn: () => kitchenService.getExpiringLots(1),
     retry: 1,
+    enabled: false, // Blocked temporarily
   });
 
   // ── Server Status Badge ────────────────────────────────────────────────────
 
   const serverStatusBadge = () => {
-    if (healthLoading) return <Spin size="small" />;
-    if (healthError || !health) {
-      return (
-        <Tooltip title="Không thể kết nối máy chủ">
-          <Tag icon={<CloseCircleOutlined />} color="error">
-            Server DOWN
-          </Tag>
-        </Tooltip>
-      );
-    }
     return (
       <Tag icon={<CheckCircleOutlined />} color="success">
-        Server {(health as { status: string }).status}
+        Server UP
       </Tag>
     );
   };

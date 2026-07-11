@@ -10,17 +10,12 @@ import type {
 const productService = {
   // ── Queries ──────────────────────────────────────
 
-  /** GET /admin/products/active — Active products list */
-  getActive: () => api.get<Product[]>('/admin/products/active'),
+  /** GET /products — All products with search/pagination */
+  getAllProducts: (params?: { search?: string; page?: number; size?: number }) =>
+    api.get<any>('/api/v1/products', params),
 
   /** GET /admin/products/{id} — Single product with active recipe */
   getById: (id: string) => api.get<Product>(`/admin/products/${id}`),
-
-  /** GET /admin/products/pending — Commands awaiting approval */
-  getPending: () => api.get<ProductCommand[]>('/admin/products/pending'),
-
-  /** GET /admin/products/rejected — Rejected commands */
-  getRejected: () => api.get<ProductCommand[]>('/admin/products/rejected'),
 
   /** GET /admin/products/{id}/history — Change history */
   getHistory: (id: string) => api.get<ProductHistory[]>(`/admin/products/${id}/history`),

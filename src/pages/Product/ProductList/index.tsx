@@ -21,6 +21,17 @@ import type {
 
 const { Title, Text } = Typography;
 
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
+  React.useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
@@ -216,36 +227,16 @@ const ProductList: React.FC = () => {
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
-  const {
-    data: activeData,
-    isLoading: activeLoading,
-    isError: activeError,
-    refetch: refetchActive,
-  } = useQuery({
-    queryKey: ['products', 'active'],
-    queryFn: () => productService.getActive(),
-    retry: false,
-  });
+  const debouncedSearchText = useDebounce(searchText, 500);
 
   const {
-    data: pendingData,
-    isLoading: pendingLoading,
-    isError: pendingError,
-    refetch: refetchPending,
+    data: productsData,
+    isLoading: productsLoading,
+    isError: productsError,
+    refetch: refetchProducts,
   } = useQuery({
-    queryKey: ['products', 'pending'],
-    queryFn: () => productService.getPending(),
-    retry: false,
-  });
-
-  const {
-    data: rejectedData,
-    isLoading: rejectedLoading,
-    isError: rejectedError,
-    refetch: refetchRejected,
-  } = useQuery({
-    queryKey: ['products', 'rejected'],
-    queryFn: () => productService.getRejected(),
+    queryKey: ['products', debouncedSearchText],
+    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, page: 0, size: 500 }),
     retry: false,
   });
 
@@ -253,19 +244,19 @@ const ProductList: React.FC = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const toArray = <T,>(raw: any): T[] => {
     if (Array.isArray(raw)) return raw as T[];
+    if (raw && typeof raw === 'object' && Array.isArray(raw.content)) return raw.content as T[];
     if (raw && typeof raw === 'object' && Array.isArray(raw.data)) return raw.data as T[];
     return [];
   };
 
-  const activeProducts   = toArray<Product>(activeData);
-  const pendingCommands  = toArray<ProductCommand>(pendingData);
-  const rejectedCommands = toArray<ProductCommand>(rejectedData);
+  const allProducts = toArray<Product>(productsData);
 
+  const activeProducts = allProducts.filter(p => p.approvalStatus !== 'DRAFT' && p.approvalStatus !== 'REJECTED');
+  const pendingCommands = allProducts.filter(p => p.approvalStatus === 'DRAFT');
+  const rejectedCommands = allProducts.filter(p => p.approvalStatus === 'REJECTED');
 
   const handleRefreshAll = () => {
-    refetchActive();
-    refetchPending();
-    refetchRejected();
+    refetchProducts();
   };
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -334,11 +325,8 @@ const ProductList: React.FC = () => {
     deleteMutation.mutate(id);
   };
 
-  const filteredActive = activeProducts.filter(
-    (p) =>
-      p.name.toLowerCase().includes(searchText.toLowerCase()) ||
-      p.code.toLowerCase().includes(searchText.toLowerCase()),
-  );
+  // Removed filteredActive since we rely on server side search
+
 
   // ── Active Tab Columns ─────────────────────────────────────────────────────────
 
@@ -439,74 +427,55 @@ const ProductList: React.FC = () => {
 
   // ── Pending Tab Columns ────────────────────────────────────────────────────────
 
-  const pendingColumns: ColumnsType<ProductCommand> = [
-    {
-      title: 'Command ID',
-      dataIndex: 'commandId',
-      key: 'commandId',
-      width: 230,
-      ellipsis: true,
-      render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text>,
-    },
-    {
-      title: 'Hành Động',
-      dataIndex: 'action',
-      key: 'action',
-      width: 110,
-      render: (v: string) => {
-        const colors: Record<string, string> = { CREATE: 'green', UPDATE: 'blue', DELETE: 'red' };
-        return <Tag color={colors[v] || 'default'}>{v}</Tag>;
-      },
-    },
+  const pendingColumns: ColumnsType<Product> = [
     {
       title: 'Tên Sản Phẩm',
+      dataIndex: 'name',
       key: 'name',
-      render: (_: unknown, r: ProductCommand) => r.payload.name,
     },
     {
       title: 'Mã SP',
+      dataIndex: 'code',
       key: 'code',
       width: 100,
-      render: (_: unknown, r: ProductCommand) => <Text code>{r.payload.code}</Text>,
+      render: (v: string) => <Text code>{v}</Text>,
     },
     {
-      title: 'Người Gửi',
-      dataIndex: 'submittedBy',
-      key: 'submittedBy',
+      title: 'Người Tạo',
+      dataIndex: 'createdBy',
+      key: 'createdBy',
       width: 120,
     },
     {
       title: 'Thời Gian',
-      dataIndex: 'submittedAt',
-      key: 'submittedAt',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
       width: 150,
-      render: (v: string) => dayjs(v).format('HH:mm DD/MM/YYYY'),
+      render: (v: string) => v ? dayjs(v).format('HH:mm DD/MM/YYYY') : '—',
     },
     {
       title: 'Duyệt / Từ Chối',
       key: 'approve',
       width: 160,
       align: 'center',
-      render: (_: unknown, record: ProductCommand) => (
+      render: (_: unknown, record: Product) => (
         <Space>
-          <Tooltip title="Phê duyệt">
+          <Tooltip title="Chức năng duyệt đang tạm khóa">
             <Button
               type="primary"
               size="small"
               icon={<CheckOutlined />}
-              onClick={() => approveMutation.mutate(record.commandId)}
-              loading={approveMutation.isPending}
+              disabled
             >
               Duyệt
             </Button>
           </Tooltip>
-          <Tooltip title="Từ chối">
+          <Tooltip title="Chức năng từ chối đang tạm khóa">
             <Button
               danger
               size="small"
               icon={<CloseOutlined />}
-              onClick={() => rejectMutation.mutate(record.commandId)}
-              loading={rejectMutation.isPending}
+              disabled
             >
               Từ Chối
             </Button>
@@ -518,34 +487,31 @@ const ProductList: React.FC = () => {
 
   // ── Rejected Tab Columns ───────────────────────────────────────────────────────
 
-  const rejectedColumns: ColumnsType<ProductCommand> = [
-    {
-      title: 'Hành Động',
-      dataIndex: 'action',
-      key: 'action',
-      width: 110,
-      render: (v: string) => {
-        const colors: Record<string, string> = { CREATE: 'green', UPDATE: 'blue', DELETE: 'red' };
-        return <Tag color={colors[v]}>{v}</Tag>;
-      },
-    },
+  const rejectedColumns: ColumnsType<Product> = [
     {
       title: 'Tên Sản Phẩm',
+      dataIndex: 'name',
       key: 'name',
-      render: (_: unknown, r: ProductCommand) => r.payload.name,
     },
     {
-      title: 'Người Gửi',
-      dataIndex: 'submittedBy',
-      key: 'submittedBy',
+      title: 'Mã SP',
+      dataIndex: 'code',
+      key: 'code',
+      width: 100,
+      render: (v: string) => <Text code>{v}</Text>,
+    },
+    {
+      title: 'Người Tạo',
+      dataIndex: 'createdBy',
+      key: 'createdBy',
       width: 120,
     },
     {
       title: 'Thời Gian',
-      dataIndex: 'submittedAt',
-      key: 'submittedAt',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
       width: 160,
-      render: (v: string) => dayjs(v).format('HH:mm DD/MM/YYYY'),
+      render: (v: string) => v ? dayjs(v).format('HH:mm DD/MM/YYYY') : '—',
     },
     {
       title: 'Lý Do Từ Chối',
@@ -563,7 +529,7 @@ const ProductList: React.FC = () => {
       label: (
         <Space>
           Đang Active
-          <Badge count={filteredActive.length} color="#52c41a" />
+          <Badge count={activeProducts.length} color="#52c41a" />
         </Space>
       ),
       children: (
@@ -580,8 +546,8 @@ const ProductList: React.FC = () => {
           </div>
           <Table<Product>
             columns={activeColumns}
-            dataSource={filteredActive}
-            loading={activeLoading}
+            dataSource={activeProducts}
+            loading={productsLoading}
             rowKey="id"
             size="middle"
             pagination={{
@@ -603,11 +569,11 @@ const ProductList: React.FC = () => {
         </Space>
       ),
       children: (
-        <Table<ProductCommand>
+        <Table<Product>
           columns={pendingColumns}
           dataSource={pendingCommands}
-          loading={pendingLoading}
-          rowKey="commandId"
+          loading={productsLoading}
+          rowKey="id"
           size="middle"
           pagination={{ pageSize: 8 }}
         />
@@ -624,11 +590,11 @@ const ProductList: React.FC = () => {
         </Space>
       ),
       children: (
-        <Table<ProductCommand>
+        <Table<Product>
           columns={rejectedColumns}
           dataSource={rejectedCommands}
-          loading={rejectedLoading}
-          rowKey="commandId"
+          loading={productsLoading}
+          rowKey="id"
           size="middle"
           pagination={{ pageSize: 8 }}
         />
@@ -650,7 +616,7 @@ const ProductList: React.FC = () => {
           <Button
             icon={<HistoryOutlined />}
             onClick={handleRefreshAll}
-            loading={activeLoading || pendingLoading || rejectedLoading}
+            loading={productsLoading}
           >
             Làm Mới
           </Button>
@@ -665,32 +631,14 @@ const ProductList: React.FC = () => {
       </div>
 
       {/* API Error banners */}
-      {activeError && (
+      {productsError && (
         <Alert
           type="error"
           showIcon
-          message="Không tải được danh sách sản phẩm active."
+          message="Không tải được danh sách sản phẩm."
           description="Kiểm tra kết nối đến backend (http://localhost:8080)."
           style={{ marginBottom: 12 }}
-          action={<Button size="small" onClick={() => refetchActive()}>Thử lại</Button>}
-        />
-      )}
-      {pendingError && (
-        <Alert
-          type="warning"
-          showIcon
-          message="Không tải được danh sách lệnh chờ duyệt."
-          style={{ marginBottom: 12 }}
-          action={<Button size="small" onClick={() => refetchPending()}>Thử lại</Button>}
-        />
-      )}
-      {rejectedError && (
-        <Alert
-          type="warning"
-          showIcon
-          message="Không tải được danh sách lệnh bị từ chối."
-          style={{ marginBottom: 12 }}
-          action={<Button size="small" onClick={() => refetchRejected()}>Thử lại</Button>}
+          action={<Button size="small" onClick={() => refetchProducts()}>Thử lại</Button>}
         />
       )}
 

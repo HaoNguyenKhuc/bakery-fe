@@ -132,14 +132,21 @@ export interface LoginResponse {
 export type ProductType = 'STANDARD' | 'SHEET_CAKE';
 export type ProductUnit  = 'PCS' | 'KG';
 
+export type ApprovalStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
+
 export interface Product extends BaseEntity {
   code: string;
   name: string;
-  productType: ProductType;
+  productType: ProductType | null;
+  productCategory: string | null;
+  sellingPrice: number | null;
   unit: ProductUnit;
-  toleranceRate: number;       // e.g. 0.05 = 5%
-  isActive: boolean;
-  activeRecipe: Recipe | null;
+  toleranceRate?: number;       // e.g. 0.05 = 5%
+  isActive?: boolean;
+  activeRecipe?: Recipe | null;
+  status: 'ACTIVE' | 'INACTIVE';
+  approvalStatus: ApprovalStatus;
+  rejectedReason: string | null;
 }
 
 /** POST /admin/products/submit/create  or  /submit/update/{id} */
