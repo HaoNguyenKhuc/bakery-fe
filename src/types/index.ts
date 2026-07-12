@@ -154,9 +154,9 @@ export interface ProductRequest {
   code: string;
   name: string;
   productType: ProductType;
+  productCategory?: string;
   unit: ProductUnit;
-  toleranceRate?: number;
-  isActive?: boolean;
+  sellingPrice?: number;
   recipe?: RecipeRequest;      // optional nested recipe
 }
 

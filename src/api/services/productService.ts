@@ -10,8 +10,8 @@ import type {
 const productService = {
   // ── Queries ──────────────────────────────────────
 
-  /** GET /products — All products with search/pagination */
-  getAllProducts: (params?: { search?: string; page?: number; size?: number }) =>
+  /** GET /products — All products with search/pagination/status */
+  getAllProducts: (params?: { search?: string; approvalStatus?: string; page?: number; size?: number }) =>
     api.get<any>('/api/v1/products', params),
 
   /** GET /admin/products/{id} — Single product with active recipe */
@@ -22,9 +22,9 @@ const productService = {
 
   // ── Commands ─────────────────────────────────────
 
-  /** POST /admin/products/submit/create — Submit new product for approval */
+  /** POST /api/v1/products — Create new product */
   submitCreate: (data: ProductRequest) =>
-    api.post<CommandResponse>('/admin/products/submit/create', data),
+    api.post<Product>('/api/v1/products', data),
 
   /** POST /admin/products/submit/update/{id} — Submit update for approval */
   submitUpdate: (id: string, data: ProductRequest) =>
@@ -36,13 +36,13 @@ const productService = {
 
   // ── Approval ─────────────────────────────────────
 
-  /** POST /admin/products/approve/{commandId} */
-  approve: (commandId: string) =>
-    api.post<CommandResponse>(`/admin/products/approve/${commandId}`),
+  /** POST /api/v1/products/{id}/approve */
+  approve: (id: string) =>
+    api.post<Product>(`/api/v1/products/${id}/approve`),
 
-  /** POST /admin/products/reject/{commandId} */
-  reject: (commandId: string, reason?: string) =>
-    api.post<CommandResponse>(`/admin/products/reject/${commandId}`, { reason }),
+  /** POST /api/v1/products/{id}/reject */
+  reject: (id: string, reason: string) =>
+    api.post<Product>(`/api/v1/products/${id}/reject`, { reason }),
 };
 
 export default productService;

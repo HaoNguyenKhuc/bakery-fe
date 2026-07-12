@@ -68,9 +68,9 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
           code: editProduct.code,
           name: editProduct.name,
           productType: editProduct.productType,
+          productCategory: editProduct.productCategory,
           unit: editProduct.unit,
-          toleranceRate: editProduct.toleranceRate,
-          isActive: editProduct.isActive,
+          sellingPrice: editProduct.sellingPrice,
         });
       } else {
         form.resetFields();
@@ -94,12 +94,6 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
       width={540}
       destroyOnClose
     >
-      <Alert
-        type="info"
-        showIcon
-        message="Lệnh sẽ ở trạng thái Chờ Duyệt cho đến khi Admin phê duyệt."
-        style={{ marginBottom: 20 }}
-      />
       <Form form={form} layout="vertical" onFinish={handleFinish}>
         <Form.Item
           name="code"
@@ -150,19 +144,30 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
           </Col>
         </Row>
 
-        <Form.Item
-          name="toleranceRate"
-          label="Tỷ Lệ Chênh Lệch Cho Phép"
-          tooltip="Tỷ lệ phần trăm chênh lệch. VD: 0.05 = 5%"
-        >
-          <InputNumber
-            min={0} max={1} step={0.01}
-            placeholder="0.05"
-            style={{ width: '100%' }}
-            formatter={(v) => `${((Number(v) || 0) * 100).toFixed(0)}%`}
-            parser={(v) => Number((v || '0').replace('%', '')) / 100}
-          />
-        </Form.Item>
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item
+              name="productCategory"
+              label="Danh Mục"
+            >
+              <Input placeholder="VD: Bánh Kem" />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item
+              name="sellingPrice"
+              label="Giá Bán (VNĐ)"
+            >
+              <InputNumber
+                min={0}
+                style={{ width: '100%' }}
+                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={(value) => Number(value!.replace(/\$\s?|(,*)/g, ''))}
+                placeholder="VD: 50,000"
+              />
+            </Form.Item>
+          </Col>
+        </Row>
       </Form>
     </Modal>
   );
@@ -225,18 +230,44 @@ const ProductList: React.FC = () => {
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
 
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   const debouncedSearchText = useDebounce(searchText, 500);
 
   const {
-    data: productsData,
-    isLoading: productsLoading,
-    isError: productsError,
-    refetch: refetchProducts,
+    data: activeData,
+    isLoading: activeLoading,
+    isError: activeError,
+    refetch: refetchActive,
   } = useQuery({
-    queryKey: ['products', debouncedSearchText],
-    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, page: 0, size: 500 }),
+    queryKey: ['products', 'APPROVED', debouncedSearchText],
+    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'APPROVED', page: 0, size: 500 }),
+    retry: false,
+  });
+
+  const {
+    data: pendingData,
+    isLoading: pendingLoading,
+    isError: pendingError,
+    refetch: refetchPending,
+  } = useQuery({
+    queryKey: ['products', 'PENDING_APPROVAL', debouncedSearchText],
+    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'PENDING_APPROVAL', page: 0, size: 500 }),
+    retry: false,
+  });
+
+  const {
+    data: rejectedData,
+    isLoading: rejectedLoading,
+    isError: rejectedError,
+    refetch: refetchRejected,
+  } = useQuery({
+    queryKey: ['products', 'REJECTED', debouncedSearchText],
+    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'REJECTED', page: 0, size: 500 }),
     retry: false,
   });
 
@@ -249,14 +280,14 @@ const ProductList: React.FC = () => {
     return [];
   };
 
-  const allProducts = toArray<Product>(productsData);
-
-  const activeProducts = allProducts.filter(p => p.approvalStatus !== 'DRAFT' && p.approvalStatus !== 'REJECTED');
-  const pendingCommands = allProducts.filter(p => p.approvalStatus === 'DRAFT');
-  const rejectedCommands = allProducts.filter(p => p.approvalStatus === 'REJECTED');
+  const activeProducts = toArray<Product>(activeData);
+  const pendingCommands = toArray<Product>(pendingData);
+  const rejectedCommands = toArray<Product>(rejectedData);
 
   const handleRefreshAll = () => {
-    refetchProducts();
+    refetchActive();
+    refetchPending();
+    refetchRejected();
   };
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
@@ -264,19 +295,19 @@ const ProductList: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: (data: ProductRequest) => productService.submitCreate(data),
     onSuccess: () => {
-      message.success('Đã gửi lệnh tạo sản phẩm. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['products', 'pending'] });
+      message.success('Tạo sản phẩm thành công.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       setDrawerOpen(false);
     },
-    onError: () => message.error('Gửi lệnh thất bại. Vui lòng thử lại.'),
+    onError: () => message.error('Tạo sản phẩm thất bại. Vui lòng thử lại.'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: ProductRequest }) =>
       productService.submitUpdate(id, data),
     onSuccess: () => {
-      message.success('Đã gửi lệnh cập nhật. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['products', 'pending'] });
+      message.success('Cập nhật sản phẩm thành công.');
+      queryClient.invalidateQueries({ queryKey: ['products'] });
       setDrawerOpen(false);
       setEditProduct(null);
     },
@@ -291,22 +322,52 @@ const ProductList: React.FC = () => {
   });
 
   const approveMutation = useMutation({
-    mutationFn: (commandId: string) => productService.approve(commandId),
+    mutationFn: (id: string) => productService.approve(id),
     onSuccess: () => {
-      message.success('Đã phê duyệt lệnh.');
+      message.success('Đã phê duyệt sản phẩm.');
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
+    onError: () => message.error('Phê duyệt thất bại. Vui lòng thử lại.'),
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (commandId: string) => productService.reject(commandId),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => productService.reject(id, reason),
     onSuccess: () => {
-      message.warning('Đã từ chối lệnh.');
+      message.warning('Đã từ chối sản phẩm.');
+      setRejectModalOpen(false);
+      setRejectReason('');
+      setRejectTargetId(null);
       queryClient.invalidateQueries({ queryKey: ['products'] });
     },
+    onError: () => message.error('Từ chối thất bại. Vui lòng thử lại.'),
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
+
+  const handleApprove = (product: Product) => {
+    Modal.confirm({
+      title: 'Phê duyệt sản phẩm',
+      content: `Bạn có chắc chắn muốn phê duyệt sản phẩm "${product.name}"?`,
+      onOk: () => approveMutation.mutate(product.id),
+      okText: 'Phê Duyệt',
+      cancelText: 'Hủy',
+    });
+  };
+
+  const handleOpenRejectModal = (product: Product) => {
+    setRejectTargetId(product.id);
+    setRejectReason('');
+    setRejectModalOpen(true);
+  };
+
+  const submitReject = () => {
+    if (!rejectTargetId) return;
+    if (!rejectReason.trim()) {
+      message.error('Vui lòng nhập lý do từ chối.');
+      return;
+    }
+    rejectMutation.mutate({ id: rejectTargetId, reason: rejectReason });
+  };
 
   const handleDrawerSubmit = (values: ProductRequest) => {
     if (editProduct) {
@@ -455,31 +516,25 @@ const ProductList: React.FC = () => {
     },
     {
       title: 'Duyệt / Từ Chối',
-      key: 'approve',
-      width: 160,
+      key: 'action',
+      width: 130,
       align: 'center',
-      render: (_: unknown, record: Product) => (
+      render: (_, record) => (
         <Space>
-          <Tooltip title="Chức năng duyệt đang tạm khóa">
-            <Button
-              type="primary"
-              size="small"
-              icon={<CheckOutlined />}
-              disabled
-            >
-              Duyệt
-            </Button>
-          </Tooltip>
-          <Tooltip title="Chức năng từ chối đang tạm khóa">
-            <Button
-              danger
-              size="small"
-              icon={<CloseOutlined />}
-              disabled
-            >
-              Từ Chối
-            </Button>
-          </Tooltip>
+          <Button
+            size="small"
+            type="primary"
+            icon={<CheckOutlined />}
+            onClick={() => handleApprove(record)}
+            title="Duyệt"
+          />
+          <Button
+            size="small"
+            danger
+            icon={<CloseOutlined />}
+            onClick={() => handleOpenRejectModal(record)}
+            title="Từ Chối"
+          />
         </Space>
       ),
     },
@@ -547,7 +602,7 @@ const ProductList: React.FC = () => {
           <Table<Product>
             columns={activeColumns}
             dataSource={activeProducts}
-            loading={productsLoading}
+            loading={activeLoading}
             rowKey="id"
             size="middle"
             pagination={{
@@ -572,7 +627,7 @@ const ProductList: React.FC = () => {
         <Table<Product>
           columns={pendingColumns}
           dataSource={pendingCommands}
-          loading={productsLoading}
+          loading={pendingLoading}
           rowKey="id"
           size="middle"
           pagination={{ pageSize: 8 }}
@@ -593,7 +648,7 @@ const ProductList: React.FC = () => {
         <Table<Product>
           columns={rejectedColumns}
           dataSource={rejectedCommands}
-          loading={productsLoading}
+          loading={rejectedLoading}
           rowKey="id"
           size="middle"
           pagination={{ pageSize: 8 }}
@@ -616,7 +671,7 @@ const ProductList: React.FC = () => {
           <Button
             icon={<HistoryOutlined />}
             onClick={handleRefreshAll}
-            loading={productsLoading}
+            loading={activeLoading || pendingLoading || rejectedLoading}
           >
             Làm Mới
           </Button>
@@ -631,14 +686,32 @@ const ProductList: React.FC = () => {
       </div>
 
       {/* API Error banners */}
-      {productsError && (
+      {activeError && (
         <Alert
           type="error"
           showIcon
-          message="Không tải được danh sách sản phẩm."
+          message="Không tải được danh sách sản phẩm active."
           description="Kiểm tra kết nối đến backend (http://localhost:8080)."
           style={{ marginBottom: 12 }}
-          action={<Button size="small" onClick={() => refetchProducts()}>Thử lại</Button>}
+          action={<Button size="small" onClick={() => refetchActive()}>Thử lại</Button>}
+        />
+      )}
+      {pendingError && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Không tải được danh sách lệnh chờ duyệt."
+          style={{ marginBottom: 12 }}
+          action={<Button size="small" onClick={() => refetchPending()}>Thử lại</Button>}
+        />
+      )}
+      {rejectedError && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Không tải được danh sách lệnh bị từ chối."
+          style={{ marginBottom: 12 }}
+          action={<Button size="small" onClick={() => refetchRejected()}>Thử lại</Button>}
         />
       )}
 
@@ -655,6 +728,25 @@ const ProductList: React.FC = () => {
         onSubmit={handleDrawerSubmit}
         submitting={createMutation.isPending || updateMutation.isPending}
       />
+
+      <Modal
+        title="Từ Chối Sản Phẩm"
+        open={rejectModalOpen}
+        onOk={submitReject}
+        onCancel={() => setRejectModalOpen(false)}
+        confirmLoading={rejectMutation.isPending}
+        okText="Gửi"
+        cancelText="Hủy"
+        okButtonProps={{ danger: true }}
+      >
+        <div style={{ marginBottom: 8 }}>Vui lòng nhập lý do từ chối:</div>
+        <Input.TextArea
+          rows={4}
+          placeholder="Lý do..."
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+        />
+      </Modal>
 
       {/* History Modal */}
       <HistoryModal
