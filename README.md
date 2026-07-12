@@ -7,6 +7,24 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
+## Running the Application
+
+Follow these steps to run the application locally:
+
+### 1. Install Dependencies
+First, install all the required packages:
+```bash
+npm install
+```
+
+### 2. Start the Development Server
+Once the installation is complete, start the local development server:
+```bash
+npm run dev
+```
+
+Your app should now be running and accessible in your web browser.
+
 ## React Compiler
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
