@@ -12,7 +12,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import { priceService, productService } from '../../../api/services';
+import { priceService, itemService } from '../../../api/services';
 import type {
   ProductPrice, ProductPriceRequest, ProductPriceCommand,
   IngredientPrice, IngredientPriceRequest, IngredientPriceCommand,
@@ -487,7 +487,7 @@ const ProductPriceDrawer: React.FC<ProductPriceDrawerProps> = ({ open, onClose, 
 
   const { data: productsData } = useQuery({
     queryKey: ['products', 'active'],
-    queryFn: () => productService.getActive(),
+    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT' }),
     retry: 1,
   });
   const products = Array.isArray(productsData) ? productsData : [];
@@ -547,6 +547,13 @@ interface IngredientPriceDrawerProps {
 const IngredientPriceDrawer: React.FC<IngredientPriceDrawerProps> = ({ open, onClose, onSubmit, submitting }) => {
   const [form] = Form.useForm<IngredientPriceRequest>();
 
+  const { data: ingredientsData } = useQuery({
+    queryKey: ['items', 'ingredients'],
+    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'INGREDIENT' }),
+    retry: 1,
+  });
+  const ingredients = Array.isArray(ingredientsData) ? ingredientsData : [];
+
   React.useEffect(() => {
     if (open) form.resetFields();
   }, [open, form]);
@@ -564,8 +571,15 @@ const IngredientPriceDrawer: React.FC<IngredientPriceDrawerProps> = ({ open, onC
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={onSubmit}>
-        <Form.Item name="ingredientId" label="ID Nguyên Liệu" rules={[{ required: true }]}>
-          <Input placeholder="UUID của nguyên liệu..." />
+        <Form.Item name="ingredientId" label="Nguyên Liệu" rules={[{ required: true }]}>
+          <Select
+            showSearch
+            placeholder="Chọn nguyên liệu..."
+            options={ingredients.map((i) => ({ value: i.id, label: `[${i.code}] ${i.name}` }))}
+            filterOption={(input, option) =>
+              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
+            }
+          />
         </Form.Item>
         <Form.Item name="pricePerKg" label="Giá / kg (VND)" rules={[{ required: true }]}>
           <InputNumber

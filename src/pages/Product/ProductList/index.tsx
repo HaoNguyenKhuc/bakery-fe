@@ -68,7 +68,7 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
             ...editProduct.activeRecipe,
             lines: editProduct.activeRecipe.lines.map(l => ({
               ...l,
-              sourceItem: l.ingredientId ? `ing:${l.ingredientId}` : l.semiProductId ? `semi:${l.semiProductId}` : undefined,
+              itemId: l.itemId,
             }))
           };
         }
@@ -89,25 +89,8 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
       }
     }
   }, [open, editProduct, form]);
-
   const handleFinish = (values: any) => {
     const payload = { ...values };
-    if (payload.recipe && payload.recipe.lines) {
-      payload.recipe.lines = payload.recipe.lines.map((line: any) => {
-        const newLine = { ...line };
-        if (newLine.sourceItem) {
-          if (newLine.sourceItem.startsWith('ing:')) {
-            newLine.ingredientId = newLine.sourceItem.replace('ing:', '');
-            newLine.semiProductId = null;
-          } else if (newLine.sourceItem.startsWith('semi:')) {
-            newLine.semiProductId = newLine.sourceItem.replace('semi:', '');
-            newLine.ingredientId = null;
-          }
-          delete newLine.sourceItem;
-        }
-        return newLine;
-      });
-    }
     onSubmit(payload);
   };
 
@@ -251,19 +234,26 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
                         <Space key={key} style={{ display: 'flex', marginBottom: 8, alignItems: 'flex-start' }} align="baseline">
                           <Form.Item
                             {...restField}
-                            name={[name, 'sourceItem']}
+                            name={[name, 'itemId']}
                             rules={[{ required: true, message: 'Chọn thành phần' }]}
                             style={{ margin: 0, width: 250 }}
                           >
-                            <Select placeholder="Chọn NL / BTP" showSearch optionFilterProp="children">
+                            <Select placeholder="Chọn Nguyên liệu / Bán thành phẩm" showSearch optionFilterProp="children" onChange={(val) => {
+                              const selectedItem = allItems.find((i: any) => i.id === val);
+                              if (selectedItem) {
+                                const currentLines = form.getFieldValue(['recipe', 'lines']) || [];
+                                currentLines[name] = { ...currentLines[name], unit: selectedItem.unit };
+                                form.setFieldsValue({ recipe: { lines: currentLines } });
+                              }
+                            }}>
                               <Select.OptGroup label="Nguyên Liệu">
                                 {ingredients.map((i: any) => (
-                                  <Select.Option key={i.id} value={`ing:${i.id}`}>{i.name}</Select.Option>
+                                  <Select.Option key={i.id} value={i.id}>{i.name}</Select.Option>
                                 ))}
                               </Select.OptGroup>
                               <Select.OptGroup label="Bán Thành Phẩm">
                                 {semiProducts.map((i: any) => (
-                                  <Select.Option key={i.id} value={`semi:${i.id}`}>{i.name}</Select.Option>
+                                  <Select.Option key={i.id} value={i.id}>{i.name}</Select.Option>
                                 ))}
                               </Select.OptGroup>
                             </Select>
@@ -271,25 +261,20 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
 
                           <Form.Item
                             {...restField}
-                            name={[name, 'quantityGram']}
+                            name={[name, 'quantity']}
                             rules={[{ required: true, message: 'Nhập số lượng' }]}
                             style={{ margin: 0, width: 120 }}
                           >
-                            <InputNumber min={0.1} step={0.1} placeholder="Gram" style={{ width: '100%' }} />
+                            <InputNumber min={0.1} step={0.1} placeholder="Số lượng" style={{ width: '100%' }} />
                           </Form.Item>
 
                           <Form.Item
                             {...restField}
-                            name={[name, 'lineType']}
-                            rules={[{ required: true, message: 'Loại' }]}
-                            style={{ margin: 0, width: 150 }}
+                            name={[name, 'unit']}
+                            rules={[{ required: true, message: 'Nhập đơn vị' }]}
+                            style={{ margin: 0, width: 120 }}
                           >
-                            <Select placeholder="Loại dòng">
-                              <Select.Option value="PHOI">Phôi</Select.Option>
-                              <Select.Option value="NHAN_CHINH">Nhân chính</Select.Option>
-                              <Select.Option value="NHAN_PHU">Nhân phụ</Select.Option>
-                              <Select.Option value="TRANG_TRI">Trang trí</Select.Option>
-                            </Select>
+                            <Input placeholder="Đơn vị" />
                           </Form.Item>
 
                           <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
@@ -365,7 +350,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ open, productId, onClose })
 const ProductList: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
-  const [activeItemType, setActiveItemType] = useState<ItemType | ''>('');
+  const [activeItemType, setActiveItemType] = useState<ItemType | ''>('PRODUCT');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);

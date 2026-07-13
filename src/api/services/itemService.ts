@@ -33,7 +33,7 @@ const itemService = {
   submitUpdate: (id: string, data: ItemRequest) =>
     api.put<Item>(`/api/v1/items/${id}`, data),
 
-  /** DELETE /api/v1/items/{id} — Delete item */
+  /** DELETE /items/{id} — Delete item */
   submitDelete: (id: string) =>
     api.delete<CommandResponse>(`/api/v1/items/${id}`),
 
@@ -43,7 +43,7 @@ const itemService = {
   approve: (id: string) =>
     api.post<Item>(`/api/v1/items/${id}/approve`),
 
-  /** POST /api/v1/items/{id}/reject */
+  /** POST /items/{id}/reject */
   reject: (id: string, reason: string) =>
     api.post<Item>(`/api/v1/items/${id}/reject`, { reason }),
 };

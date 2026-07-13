@@ -1,5 +1,4 @@
 export { default as dashboardService } from './dashboardService';
-export { default as productService } from './productService';
 export { default as recipeService } from './recipeService';
 export { default as priceService } from './priceService';
 export { default as kitchenService } from './kitchenService';
