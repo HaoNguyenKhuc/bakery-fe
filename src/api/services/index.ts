@@ -11,3 +11,4 @@ export { default as branchService } from './branchService';
 export { default as warehouseService } from './warehouseService';
 export { default as masterService } from './masterService';
 export type { Warehouse } from './warehouseService';
+export { default as itemService } from './itemService'; 

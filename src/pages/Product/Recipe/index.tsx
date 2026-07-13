@@ -12,7 +12,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import { recipeService, productService } from '../../../api/services';
+import { recipeService, itemService } from '../../../api/services';
 import type {
   Product, Recipe, RecipeLine, RecipeRequest, RecipeLineRequest,
   RecipeType, RecipeLineType, ProductUnit,
@@ -48,19 +48,17 @@ const LINE_TYPE_COLORS: Record<RecipeLineType, string> = {
 const dummyProducts: Product[] = [
   {
     id: '1', code: 'BM001', name: 'Bánh Mì Bơ Tỏi',
-    productType: 'STANDARD', unit: 'PCS', toleranceRate: 0.05, isActive: true,
-    activeRecipe: null, entityStatus: 'ACTIVE',
+    itemType: 'PRODUCT', productType: 'STANDARD', unit: 'PCS', isActive: true,
+    activeRecipe: null, status: 'ACTIVE', approvalStatus: 'APPROVED', rejectedReason: null,
     createdBy: 'admin', createdAt: '2026-01-10T07:00:00Z',
     updatedBy: 'admin', updatedAt: '2026-01-10T07:00:00Z',
-    approvedBy: 'admin', approvedAt: '2026-01-10T08:00:00Z',
   },
   {
     id: '2', code: 'BK001', name: 'Bánh Kem Socola',
-    productType: 'SHEET_CAKE', unit: 'KG', toleranceRate: 0.08, isActive: true,
-    activeRecipe: null, entityStatus: 'ACTIVE',
-    createdBy: 'admin', createdAt: '2026-02-01T07:00:00Z',
-    updatedBy: 'admin', updatedAt: '2026-02-01T07:00:00Z',
-    approvedBy: 'admin', approvedAt: '2026-02-01T08:00:00Z',
+    itemType: 'PRODUCT', productType: 'SHEET_CAKE', unit: 'KG', isActive: true,
+    activeRecipe: null, status: 'ACTIVE', approvalStatus: 'APPROVED', rejectedReason: null,
+    createdBy: 'admin', createdAt: '2026-01-11T07:00:00Z',
+    updatedBy: 'admin', updatedAt: '2026-01-11T07:00:00Z',
   },
 ];
 
@@ -134,7 +132,7 @@ const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) 
           value={v}
           onChange={(val) =>
             updateLine(record.rowKey, {
-              sourceType: val,
+              sourceType: val as 'ingredient' | 'semi-product',
               ingredientId: undefined,
               semiProductId: undefined,
               ingredientName: undefined,
@@ -255,13 +253,13 @@ const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) 
 
 interface CreateRecipeModalProps {
   open: boolean;
-  productId: string;
+  item: Product;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
-  open, productId, onClose, onSuccess,
+  open, item, onClose, onSuccess,
 }) => {
   const [form] = Form.useForm();
   const [lines, setLines] = useState<RecipeLineRow[]>([]);
@@ -278,7 +276,7 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
     mutationFn: (data: RecipeRequest) => recipeService.create(data),
     onSuccess: () => {
       message.success('Tạo phiên bản công thức mới thành công! Phiên bản cũ đã bị deactivate.');
-      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+      queryClient.invalidateQueries({ queryKey: ['recipes', item.id] });
       onSuccess();
       onClose();
     },
@@ -302,7 +300,8 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
     }));
 
     createMutation.mutate({
-      productId,
+      productId: item.itemType === 'PRODUCT' ? item.id : undefined,
+      semiProductId: item.itemType === 'SEMI_PRODUCT' ? item.id : undefined,
       effectiveDate: values.effectiveDate
         ? dayjs(values.effectiveDate).format('YYYY-MM-DD')
         : dayjs().format('YYYY-MM-DD'),
@@ -365,12 +364,60 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
 interface RecipeVersionListProps {
   recipes: Recipe[];
   unit: ProductUnit;
+  productId: string;
 }
 
-const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit }) => {
+const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, productId }) => {
   const [expandedVersion, setExpandedVersion] = useState<string | null>(
     recipes.find((r) => r.isActive)?.id || null,
   );
+  
+  const queryClient = useQueryClient();
+
+  const approveMut = useMutation({
+    mutationFn: recipeService.approve,
+    onSuccess: () => {
+      message.success('Đã duyệt công thức!');
+      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+    },
+    onError: () => message.error('Duyệt thất bại.'),
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: recipeService.reject,
+    onSuccess: () => {
+      message.success('Đã từ chối công thức!');
+      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+    },
+    onError: () => message.error('Từ chối thất bại.'),
+  });
+
+  const activateMut = useMutation({
+    mutationFn: recipeService.activate,
+    onSuccess: () => {
+      message.success('Đã kích hoạt công thức!');
+      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+    },
+    onError: () => message.error('Kích hoạt thất bại.'),
+  });
+
+  const cloneMut = useMutation({
+    mutationFn: recipeService.clone,
+    onSuccess: () => {
+      message.success('Nhân bản thành công (Draft)!');
+      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+    },
+    onError: () => message.error('Nhân bản thất bại.'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: recipeService.delete,
+    onSuccess: () => {
+      message.success('Đã xoá!');
+      queryClient.invalidateQueries({ queryKey: ['recipes', productId] });
+    },
+    onError: () => message.error('Xoá thất bại.'),
+  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -394,6 +441,15 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit }) 
                   Cũ
                 </Tag>
               )}
+              {recipe.approvalStatus && (
+                <Tag color={
+                  recipe.approvalStatus === 'APPROVED' ? 'success' :
+                  recipe.approvalStatus === 'PENDING_APPROVAL' ? 'processing' :
+                  recipe.approvalStatus === 'REJECTED' ? 'error' : 'default'
+                }>
+                  {recipe.approvalStatus}
+                </Tag>
+              )}
               {recipe.recipeType === 'ADDON' && (
                 <Tag color="orange" icon={<ExperimentOutlined />}>
                   ADDON
@@ -410,15 +466,32 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit }) 
             </Space>
           }
           extra={
-            <Button
-              type="link"
-              size="small"
-              onClick={() =>
-                setExpandedVersion(expandedVersion === recipe.id ? null : recipe.id)
-              }
-            >
-              {expandedVersion === recipe.id ? 'Thu gọn' : 'Xem chi tiết'}
-            </Button>
+            <Space>
+              {recipe.approvalStatus === 'PENDING_APPROVAL' && (
+                <>
+                  <Button size="small" type="primary" loading={approveMut.isPending} onClick={() => approveMut.mutate(recipe.id)}>Duyệt</Button>
+                  <Button size="small" danger loading={rejectMut.isPending} onClick={() => rejectMut.mutate(recipe.id)}>Từ chối</Button>
+                </>
+              )}
+              {recipe.approvalStatus === 'APPROVED' && !recipe.isActive && (
+                <Button size="small" loading={activateMut.isPending} onClick={() => activateMut.mutate(recipe.id)}>Kích hoạt</Button>
+              )}
+              <Button size="small" loading={cloneMut.isPending} onClick={() => cloneMut.mutate(recipe.id)}>Nhân bản</Button>
+              {(recipe.approvalStatus === 'DRAFT' || recipe.approvalStatus === 'REJECTED') && (
+                <Popconfirm title="Xoá bản này?" onConfirm={() => deleteMut.mutate(recipe.id)}>
+                  <Button size="small" danger icon={<DeleteOutlined />} loading={deleteMut.isPending} />
+                </Popconfirm>
+              )}
+              <Button
+                type="link"
+                size="small"
+                onClick={() =>
+                  setExpandedVersion(expandedVersion === recipe.id ? null : recipe.id)
+                }
+              >
+                {expandedVersion === recipe.id ? 'Thu gọn' : 'Xem chi tiết'}
+              </Button>
+            </Space>
           }
         >
           {expandedVersion === recipe.id && (
@@ -499,8 +572,8 @@ const RecipePage: React.FC = () => {
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
 
   const { data: productsData } = useQuery({
-    queryKey: ['products', 'active'],
-    queryFn: () => productService.getActive(),
+    queryKey: ['products', 'recipes_items'],
+    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT,SEMI_PRODUCT', approvalStatus: 'APPROVED' }),
     retry: 1,
   });
 
@@ -510,9 +583,13 @@ const RecipePage: React.FC = () => {
 
   const { data: recipesData, isLoading: recipesLoading } = useQuery({
     queryKey: ['recipes', selectedProductId],
-    queryFn: () =>
-      recipeService.getByProduct(selectedProductId!, false),
-    enabled: !!selectedProductId,
+    queryFn: () => {
+      if (selectedProduct?.itemType === 'SEMI_PRODUCT') {
+        return recipeService.getBySemiProduct(selectedProductId!);
+      }
+      return recipeService.getByProduct(selectedProductId!);
+    },
+    enabled: !!selectedProductId && !!selectedProduct,
     retry: 1,
   });
 
@@ -554,7 +631,7 @@ const RecipePage: React.FC = () => {
           <Col flex={1}>
             <Select
               showSearch
-              placeholder="Tìm và chọn sản phẩm..."
+              placeholder="Tìm và chọn sản phẩm/bán thành phẩm..."
               style={{ width: '100%', maxWidth: 480 }}
               value={selectedProductId}
               onChange={setSelectedProductId}
@@ -563,7 +640,7 @@ const RecipePage: React.FC = () => {
               }
               options={products.map((p) => ({
                 value: p.id,
-                label: `[${p.code}] ${p.name}`,
+                label: `[${p.code}] ${p.name} (${p.itemType === 'SEMI_PRODUCT' ? 'Bán Thành Phẩm' : 'Thành Phẩm'})`,
               }))}
             />
           </Col>
@@ -607,14 +684,15 @@ const RecipePage: React.FC = () => {
         <RecipeVersionList
           recipes={sortedRecipes}
           unit={selectedProduct?.unit || 'PCS'}
+          productId={selectedProductId}
         />
       )}
 
       {/* Create Drawer */}
-      {selectedProductId && (
+      {selectedProduct && (
         <CreateRecipeDrawer
           open={createDrawerOpen}
-          productId={selectedProductId}
+          item={selectedProduct}
           onClose={() => setCreateDrawerOpen(false)}
           onSuccess={() => setCreateDrawerOpen(false)}
         />

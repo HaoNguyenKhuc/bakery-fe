@@ -134,31 +134,53 @@ export type ProductUnit  = 'PCS' | 'KG';
 
 export type ApprovalStatus = 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
-export interface Product extends BaseEntity {
+export type ItemType = 'INGREDIENT' | 'SEMI_PRODUCT' | 'PRODUCT';
+
+export interface Item extends BaseEntity {
   code: string;
   name: string;
-  productType: ProductType | null;
-  productCategory: string | null;
-  sellingPrice: number | null;
-  unit: ProductUnit;
-  toleranceRate?: number;       // e.g. 0.05 = 5%
-  isActive?: boolean;
-  activeRecipe?: Recipe | null;
+  itemType: ItemType;
+  unit: string;
   status: 'ACTIVE' | 'INACTIVE';
   approvalStatus: ApprovalStatus;
   rejectedReason: string | null;
+
+  // Specific to Ingredient
+  ingredientType?: string;
+  defaultSupplier?: string | null; // or ReferenceValue
+  lastPrice?: number;
+  lastPriceDate?: string;
+
+  // Specific to Product
+  productType?: ProductType | null;
+  productCategory?: string | null;
+  sellingPrice?: number | null;
+
+  // Related to SemiProduct / Product
+  activeRecipe?: Recipe | null;
+  recipe?: RecipeRequest | null;
 }
 
-/** POST /admin/products/submit/create  or  /submit/update/{id} */
-export interface ProductRequest {
+export interface ItemRequest {
   code: string;
   name: string;
-  productType: ProductType;
+  itemType: ItemType;
+  unit: string;
+
+  // Ingredient fields
+  ingredientType?: string;
+  defaultSupplier?: string | null;
+
+  // Product fields
+  productType?: ProductType;
   productCategory?: string;
-  unit: ProductUnit;
   sellingPrice?: number;
-  recipe?: RecipeRequest;      // optional nested recipe
+
+  recipe?: RecipeRequest;
 }
+
+export type Product = Item;
+export type ProductRequest = ItemRequest;
 
 // Pending / rejected command rows
 export interface ProductCommand {
@@ -202,24 +224,19 @@ export interface Recipe {
   isActive: boolean;
   effectiveDate: string;       // yyyy-MM-dd
   recipeType: RecipeType;
+  approvalStatus?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   note?: string;
   lines: RecipeLine[];
 }
 
-/** POST /master/recipes */
+/** POST /master/recipes or Nested inside ProductRequest.recipe */
 export interface RecipeRequest {
-  productId: string;
+  productId?: string;
+  semiProductId?: string;
   effectiveDate?: string;
   isActive?: boolean;
   note?: string;
   recipeType?: RecipeType;
-  lines: RecipeLineRequest[];
-}
-
-/** Nested inside ProductRequest.recipe */
-export interface RecipeRequest {
-  effectiveDate?: string;
-  note?: string;
   lines: RecipeLineRequest[];
 }
 

@@ -1,22 +1,22 @@
 import React, { useState } from 'react';
 import {
   Table, Button, Input, Tag, Space, Typography, Tabs,
-  Modal, Form, Select, InputNumber, Divider, Alert,
+  Modal, Form, Select, InputNumber, Divider, Alert, Card,
   Tooltip, Popconfirm, Badge, Row, Col, Timeline,
   message,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, EditOutlined,
   DeleteOutlined, CheckOutlined, CloseOutlined,
-  HistoryOutlined, EyeOutlined, ExclamationCircleOutlined,
+  HistoryOutlined, ExclamationCircleOutlined, MinusCircleOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import { productService } from '../../../api/services';
+import { itemService } from '../../../api/services';
 import type {
-  Product, ProductRequest, ProductCommand, ProductHistory,
-  ProductType, ProductUnit,
+  Product, ProductRequest, ProductHistory,
+  ProductType, ProductUnit, ItemType,
 } from '../../../types';
 
 const { Title, Text } = Typography;
@@ -33,16 +33,6 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const PRODUCT_TYPE_LABELS: Record<ProductType, string> = {
-  STANDARD: 'Theo cái',
-  SHEET_CAKE: 'Theo kg',
-};
-
-const PRODUCT_UNIT_LABELS: Record<ProductUnit, string> = {
-  PCS: 'PCS (cái)',
-  KG: 'KG',
-};
 
 // ─── (Dummy data removed — page now uses live API) ───────────────────────────
 
@@ -61,16 +51,38 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
 }) => {
   const [form] = Form.useForm<ProductRequest>();
 
+  const { data: allItemsData } = useQuery({
+    queryKey: ['items', 'all'],
+    queryFn: () => itemService.getAllItemsUnpaginated(),
+  });
+  const allItems = Array.isArray(allItemsData) ? allItemsData : ((allItemsData as any)?.data || []);
+  const ingredients = allItems.filter((i: any) => i.itemType === 'INGREDIENT');
+  const semiProducts = allItems.filter((i: any) => i.itemType === 'SEMI_PRODUCT');
+
   React.useEffect(() => {
     if (open) {
       if (editProduct) {
+        let recipe = undefined;
+        if (editProduct.activeRecipe) {
+          recipe = {
+            ...editProduct.activeRecipe,
+            lines: editProduct.activeRecipe.lines.map(l => ({
+              ...l,
+              sourceItem: l.ingredientId ? `ing:${l.ingredientId}` : l.semiProductId ? `semi:${l.semiProductId}` : undefined,
+            }))
+          };
+        }
         form.setFieldsValue({
           code: editProduct.code,
           name: editProduct.name,
-          productType: editProduct.productType,
-          productCategory: editProduct.productCategory,
+          itemType: editProduct.itemType || 'PRODUCT',
+          productType: editProduct.productType || undefined,
+          productCategory: editProduct.productCategory || undefined,
           unit: editProduct.unit,
-          sellingPrice: editProduct.sellingPrice,
+          sellingPrice: editProduct.sellingPrice || undefined,
+          ingredientType: editProduct.ingredientType || undefined,
+          defaultSupplier: editProduct.defaultSupplier || undefined,
+          recipe: recipe as any,
         });
       } else {
         form.resetFields();
@@ -78,23 +90,52 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
     }
   }, [open, editProduct, form]);
 
-  const handleFinish = (values: ProductRequest) => {
-    onSubmit(values);
+  const handleFinish = (values: any) => {
+    const payload = { ...values };
+    if (payload.recipe && payload.recipe.lines) {
+      payload.recipe.lines = payload.recipe.lines.map((line: any) => {
+        const newLine = { ...line };
+        if (newLine.sourceItem) {
+          if (newLine.sourceItem.startsWith('ing:')) {
+            newLine.ingredientId = newLine.sourceItem.replace('ing:', '');
+            newLine.semiProductId = null;
+          } else if (newLine.sourceItem.startsWith('semi:')) {
+            newLine.semiProductId = newLine.sourceItem.replace('semi:', '');
+            newLine.ingredientId = null;
+          }
+          delete newLine.sourceItem;
+        }
+        return newLine;
+      });
+    }
+    onSubmit(payload);
   };
 
   return (
     <Modal
-      title={editProduct ? 'Chỉnh Sửa Sản Phẩm' : 'Thêm Sản Phẩm Mới'}
+      title={editProduct ? 'Chỉnh Sửa Hàng Hoá' : 'Thêm Hàng Hoá Mới'}
       open={open}
       onCancel={onClose}
       onOk={() => form.submit()}
       okText={editProduct ? 'Gửi Cập Nhật' : 'Gửi Tạo Mới'}
       cancelText="Huỷ"
       confirmLoading={submitting}
-      width={540}
+      width={800}
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={handleFinish}>
+        <Form.Item
+          name="itemType"
+          label="Loại Hàng Hoá"
+          rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
+        >
+          <Select placeholder="Chọn loại" disabled={!!editProduct} onChange={(val) => form.setFieldsValue({ itemType: val })}>
+            <Select.Option value="INGREDIENT">Nguyên Liệu</Select.Option>
+            <Select.Option value="SEMI_PRODUCT">Bán Thành Phẩm</Select.Option>
+            <Select.Option value="PRODUCT">Sản Phẩm</Select.Option>
+          </Select>
+        </Form.Item>
+
         <Form.Item
           name="code"
           label="Mã Sản Phẩm (IN-CODE)"
@@ -144,30 +185,128 @@ const ProductDrawer: React.FC<ProductModalProps> = ({
           </Col>
         </Row>
 
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="productCategory"
-              label="Danh Mục"
-            >
-              <Input placeholder="VD: Bánh Kem" />
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="sellingPrice"
-              label="Giá Bán (VNĐ)"
-            >
-              <InputNumber
-                min={0}
-                style={{ width: '100%' }}
-                formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                parser={(value) => Number(value!.replace(/\$\s?|(,*)/g, ''))}
-                placeholder="VD: 50,000"
-              />
-            </Form.Item>
-          </Col>
-        </Row>
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) => prevValues.itemType !== currentValues.itemType}
+        >
+          {({ getFieldValue }) => {
+            const currentItemType = getFieldValue('itemType');
+            return currentItemType === 'INGREDIENT' ? (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
+                    <Input placeholder="VD: Bột" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
+                    <Input placeholder="VD: NCC A" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            ) : (
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item
+                    name="productCategory"
+                    label="Danh Mục"
+                  >
+                    <Input placeholder="VD: Bánh Kem" />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item
+                    name="sellingPrice"
+                    label="Giá Bán (VNĐ)"
+                  >
+                    <InputNumber<number>
+                      min={0}
+                      style={{ width: '100%' }}
+                      formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      parser={(value) => value ? Number(value.replace(/\$\s?|(,*)/g, '')) : 0}
+                      placeholder="VD: 50,000"
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            );
+          }}
+        </Form.Item>
+
+        {/* Recipe Form List Section */}
+        <Form.Item
+          noStyle
+          shouldUpdate={(prevValues, currentValues) => prevValues.itemType !== currentValues.itemType}
+        >
+          {({ getFieldValue }) => {
+            const currentItemType = getFieldValue('itemType');
+            if (currentItemType === 'INGREDIENT') return null;
+
+            return (
+              <Card size="small" title="Cấu hình Công Thức (Recipe)" style={{ marginTop: 16 }}>
+                <Form.List name={['recipe', 'lines']}>
+                  {(fields, { add, remove }) => (
+                    <>
+                      {fields.map(({ key, name, ...restField }) => (
+                        <Space key={key} style={{ display: 'flex', marginBottom: 8, alignItems: 'flex-start' }} align="baseline">
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'sourceItem']}
+                            rules={[{ required: true, message: 'Chọn thành phần' }]}
+                            style={{ margin: 0, width: 250 }}
+                          >
+                            <Select placeholder="Chọn NL / BTP" showSearch optionFilterProp="children">
+                              <Select.OptGroup label="Nguyên Liệu">
+                                {ingredients.map((i: any) => (
+                                  <Select.Option key={i.id} value={`ing:${i.id}`}>{i.name}</Select.Option>
+                                ))}
+                              </Select.OptGroup>
+                              <Select.OptGroup label="Bán Thành Phẩm">
+                                {semiProducts.map((i: any) => (
+                                  <Select.Option key={i.id} value={`semi:${i.id}`}>{i.name}</Select.Option>
+                                ))}
+                              </Select.OptGroup>
+                            </Select>
+                          </Form.Item>
+
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'quantityGram']}
+                            rules={[{ required: true, message: 'Nhập số lượng' }]}
+                            style={{ margin: 0, width: 120 }}
+                          >
+                            <InputNumber min={0.1} step={0.1} placeholder="Gram" style={{ width: '100%' }} />
+                          </Form.Item>
+
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'lineType']}
+                            rules={[{ required: true, message: 'Loại' }]}
+                            style={{ margin: 0, width: 150 }}
+                          >
+                            <Select placeholder="Loại dòng">
+                              <Select.Option value="PHOI">Phôi</Select.Option>
+                              <Select.Option value="NHAN_CHINH">Nhân chính</Select.Option>
+                              <Select.Option value="NHAN_PHU">Nhân phụ</Select.Option>
+                              <Select.Option value="TRANG_TRI">Trang trí</Select.Option>
+                            </Select>
+                          </Form.Item>
+
+                          <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
+                        </Space>
+                      ))}
+                      <Form.Item style={{ margin: 0, marginTop: 8 }}>
+                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
+                          Thêm Dòng Công Thức
+                        </Button>
+                      </Form.Item>
+                    </>
+                  )}
+                </Form.List>
+              </Card>
+            );
+          }}
+        </Form.Item>
       </Form>
     </Modal>
   );
@@ -184,7 +323,7 @@ interface HistoryModalProps {
 const HistoryModal: React.FC<HistoryModalProps> = ({ open, productId, onClose }) => {
   const { data: history, isLoading } = useQuery({
     queryKey: ['product-history', productId],
-    queryFn: () => productService.getHistory(productId!),
+    queryFn: () => itemService.getHistory(productId!),
     enabled: open && !!productId,
   });
 
@@ -226,6 +365,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ open, productId, onClose })
 const ProductList: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
+  const [activeItemType, setActiveItemType] = useState<ItemType | ''>('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
@@ -244,8 +384,8 @@ const ProductList: React.FC = () => {
     isError: activeError,
     refetch: refetchActive,
   } = useQuery({
-    queryKey: ['products', 'APPROVED', debouncedSearchText],
-    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'APPROVED', page: 0, size: 500 }),
+    queryKey: ['items', 'APPROVED', debouncedSearchText, activeItemType],
+    queryFn: () => itemService.getAllItems({ search: debouncedSearchText, approvalStatus: 'APPROVED', itemType: activeItemType || undefined, page: 0, size: 500 }),
     retry: false,
   });
 
@@ -255,8 +395,8 @@ const ProductList: React.FC = () => {
     isError: pendingError,
     refetch: refetchPending,
   } = useQuery({
-    queryKey: ['products', 'PENDING_APPROVAL', debouncedSearchText],
-    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'PENDING_APPROVAL', page: 0, size: 500 }),
+    queryKey: ['items', 'PENDING_APPROVAL', debouncedSearchText, activeItemType],
+    queryFn: () => itemService.getAllItems({ search: debouncedSearchText, approvalStatus: 'PENDING_APPROVAL', itemType: activeItemType || undefined, page: 0, size: 500 }),
     retry: false,
   });
 
@@ -266,8 +406,8 @@ const ProductList: React.FC = () => {
     isError: rejectedError,
     refetch: refetchRejected,
   } = useQuery({
-    queryKey: ['products', 'REJECTED', debouncedSearchText],
-    queryFn: () => productService.getAllProducts({ search: debouncedSearchText, approvalStatus: 'REJECTED', page: 0, size: 500 }),
+    queryKey: ['items', 'REJECTED', debouncedSearchText, activeItemType],
+    queryFn: () => itemService.getAllItems({ search: debouncedSearchText, approvalStatus: 'REJECTED', itemType: activeItemType || undefined, page: 0, size: 500 }),
     retry: false,
   });
 
@@ -293,51 +433,51 @@ const ProductList: React.FC = () => {
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
   const createMutation = useMutation({
-    mutationFn: (data: ProductRequest) => productService.submitCreate(data),
+    mutationFn: (data: ProductRequest) => itemService.submitCreate(data),
     onSuccess: () => {
-      message.success('Tạo sản phẩm thành công.');
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      message.success('Tạo thành công.');
+      queryClient.invalidateQueries({ queryKey: ['items'] });
       setDrawerOpen(false);
     },
-    onError: () => message.error('Tạo sản phẩm thất bại. Vui lòng thử lại.'),
+    onError: () => message.error('Tạo thất bại. Vui lòng thử lại.'),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: ProductRequest }) =>
-      productService.submitUpdate(id, data),
+      itemService.submitUpdate(id, data),
     onSuccess: () => {
-      message.success('Cập nhật sản phẩm thành công.');
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      message.success('Cập nhật thành công.');
+      queryClient.invalidateQueries({ queryKey: ['items'] });
       setDrawerOpen(false);
       setEditProduct(null);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => productService.submitDelete(id),
+    mutationFn: (id: string) => itemService.submitDelete(id),
     onSuccess: () => {
       message.success('Đã gửi lệnh xoá. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['products', 'pending'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
   });
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => productService.approve(id),
+    mutationFn: (id: string) => itemService.approve(id),
     onSuccess: () => {
-      message.success('Đã phê duyệt sản phẩm.');
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      message.success('Đã phê duyệt.');
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: () => message.error('Phê duyệt thất bại. Vui lòng thử lại.'),
   });
 
   const rejectMutation = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) => productService.reject(id, reason),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => itemService.reject(id, reason),
     onSuccess: () => {
-      message.warning('Đã từ chối sản phẩm.');
+      message.warning('Đã từ chối.');
       setRejectModalOpen(false);
       setRejectReason('');
       setRejectTargetId(null);
-      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['items'] });
     },
     onError: () => message.error('Từ chối thất bại. Vui lòng thử lại.'),
   });
@@ -346,8 +486,8 @@ const ProductList: React.FC = () => {
 
   const handleApprove = (product: Product) => {
     Modal.confirm({
-      title: 'Phê duyệt sản phẩm',
-      content: `Bạn có chắc chắn muốn phê duyệt sản phẩm "${product.name}"?`,
+      title: 'Phê duyệt hàng hoá',
+      content: `Bạn có chắc chắn muốn phê duyệt "${product.name}"?`,
       onOk: () => approveMutation.mutate(product.id),
       okText: 'Phê Duyệt',
       cancelText: 'Hủy',
@@ -393,33 +533,28 @@ const ProductList: React.FC = () => {
 
   const activeColumns: ColumnsType<Product> = [
     {
-      title: 'Mã SP',
+      title: 'Mã',
       dataIndex: 'code',
       key: 'code',
       width: 110,
       render: (v: string) => <Text code>{v}</Text>,
     },
     {
-      title: 'Tên Sản Phẩm',
+      title: 'Tên Hàng Hoá',
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => a.name.localeCompare(b.name),
     },
     {
-      title: 'Loại',
-      dataIndex: 'productType',
-      key: 'productType',
+      title: 'Phân Loại',
+      dataIndex: 'itemType',
+      key: 'itemType',
       width: 140,
-      render: (v: ProductType) => (
-        <Tag color={v === 'SHEET_CAKE' ? 'purple' : 'blue'}>
-          {PRODUCT_TYPE_LABELS[v]}
+      render: (v: ItemType) => (
+        <Tag color={v === 'INGREDIENT' ? 'blue' : v === 'SEMI_PRODUCT' ? 'purple' : 'green'}>
+          {v === 'INGREDIENT' ? 'Nguyên Liệu' : v === 'SEMI_PRODUCT' ? 'Bán Thành Phẩm' : v === 'PRODUCT' ? 'Sản Phẩm' : 'Khác'}
         </Tag>
       ),
-      filters: [
-        { text: 'Theo cái', value: 'STANDARD' },
-        { text: 'Theo kg', value: 'SHEET_CAKE' },
-      ],
-      onFilter: (value, record) => record.productType === value,
     },
     {
       title: 'Đơn Vị',
@@ -427,26 +562,29 @@ const ProductList: React.FC = () => {
       key: 'unit',
       width: 90,
       align: 'center',
-      render: (v: ProductUnit) => <Tag>{PRODUCT_UNIT_LABELS[v]}</Tag>,
+      render: (v: string) => <Tag>{v}</Tag>,
     },
     {
-      title: 'Tỷ Lệ Chênh Lệch',
-      dataIndex: 'toleranceRate',
-      key: 'toleranceRate',
-      width: 150,
-      align: 'center',
-      render: (v: number) => `${(v * 100).toFixed(0)}%`,
+      title: 'Giá (Tham khảo)',
+      key: 'price',
+      width: 130,
+      align: 'right',
+      render: (_: unknown, record: Product) => {
+        const price = record.itemType === 'INGREDIENT' ? record.lastPrice : record.sellingPrice;
+        return price ? `${price.toLocaleString()} đ` : '—';
+      },
     },
     {
       title: 'Công Thức',
       key: 'activeRecipe',
       width: 120,
       align: 'center',
-      render: (_: unknown, record: Product) => (
-        record.activeRecipe
+      render: (_: unknown, record: Product) => {
+        if (record.itemType === 'INGREDIENT') return <Text type="secondary">—</Text>;
+        return record.activeRecipe
           ? <Tag color="green">Có</Tag>
-          : <Tag color="red">Chưa có</Tag>
-      ),
+          : <Tag color="red">Chưa có</Tag>;
+      },
     },
     {
       title: 'Thao Tác',
@@ -470,7 +608,7 @@ const ProductList: React.FC = () => {
             />
           </Tooltip>
           <Popconfirm
-            title="Xoá sản phẩm"
+            title="Xoá hàng hoá"
             description={`Lệnh xoá "${record.name}" sẽ được gửi đến Admin để phê duyệt.`}
             onConfirm={() => handleDelete(record.id)}
             okText="Gửi Lệnh Xoá"
@@ -490,16 +628,27 @@ const ProductList: React.FC = () => {
 
   const pendingColumns: ColumnsType<Product> = [
     {
-      title: 'Tên Sản Phẩm',
+      title: 'Tên Hàng Hoá',
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: 'Mã SP',
+      title: 'Mã',
       dataIndex: 'code',
       key: 'code',
       width: 100,
       render: (v: string) => <Text code>{v}</Text>,
+    },
+    {
+      title: 'Loại',
+      dataIndex: 'itemType',
+      key: 'itemType',
+      width: 120,
+      render: (v: ItemType) => (
+        <Tag color={v === 'INGREDIENT' ? 'blue' : v === 'SEMI_PRODUCT' ? 'purple' : 'green'}>
+          {v === 'INGREDIENT' ? 'Nguyên Liệu' : v === 'SEMI_PRODUCT' ? 'Bán Thành Phẩm' : v === 'PRODUCT' ? 'Sản Phẩm' : 'Khác'}
+        </Tag>
+      ),
     },
     {
       title: 'Người Tạo',
@@ -544,16 +693,27 @@ const ProductList: React.FC = () => {
 
   const rejectedColumns: ColumnsType<Product> = [
     {
-      title: 'Tên Sản Phẩm',
+      title: 'Tên Hàng Hoá',
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: 'Mã SP',
+      title: 'Mã',
       dataIndex: 'code',
       key: 'code',
       width: 100,
       render: (v: string) => <Text code>{v}</Text>,
+    },
+    {
+      title: 'Loại',
+      dataIndex: 'itemType',
+      key: 'itemType',
+      width: 120,
+      render: (v: ItemType) => (
+        <Tag color={v === 'INGREDIENT' ? 'blue' : v === 'SEMI_PRODUCT' ? 'purple' : 'green'}>
+          {v === 'INGREDIENT' ? 'Nguyên Liệu' : v === 'SEMI_PRODUCT' ? 'Bán Thành Phẩm' : v === 'PRODUCT' ? 'Sản Phẩm' : 'Khác'}
+        </Tag>
+      ),
     },
     {
       title: 'Người Tạo',
@@ -664,10 +824,30 @@ const ProductList: React.FC = () => {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <Title level={3} style={{ margin: 0 }}>Quản Lý Sản Phẩm</Title>
-          <Text type="secondary">Tạo, chỉnh sửa và phê duyệt sản phẩm theo quy trình duyệt lệnh</Text>
+          <Title level={3} style={{ margin: 0 }}>Quản Lý Hàng Hoá</Title>
+          <Text type="secondary">Tạo, chỉnh sửa và phê duyệt nguyên liệu, bán thành phẩm, sản phẩm</Text>
         </div>
         <Space>
+          <Input
+            placeholder="Tìm kiếm mã, tên..."
+            prefix={<SearchOutlined />}
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
+            style={{ width: 250 }}
+            allowClear
+          />
+          <Select
+            value={activeItemType}
+            onChange={(val) => setActiveItemType(val as ItemType | '')}
+            style={{ width: 160 }}
+            placeholder="Tất cả hàng hoá"
+            allowClear
+          >
+            <Select.Option value="">Tất cả</Select.Option>
+            <Select.Option value="INGREDIENT">Nguyên Liệu</Select.Option>
+            <Select.Option value="SEMI_PRODUCT">Bán Thành Phẩm</Select.Option>
+            <Select.Option value="PRODUCT">Sản Phẩm</Select.Option>
+          </Select>
           <Button
             icon={<HistoryOutlined />}
             onClick={handleRefreshAll}
@@ -680,7 +860,7 @@ const ProductList: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={() => { setEditProduct(null); setDrawerOpen(true); }}
           >
-            Thêm Sản Phẩm
+            Thêm Hàng Hoá
           </Button>
         </Space>
       </div>
