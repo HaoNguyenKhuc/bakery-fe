@@ -204,28 +204,22 @@ export interface ProductHistory extends BaseEntity {
 // RECIPE
 // ─────────────────────────────────────────────
 
-export type RecipeType    = 'BASE' | 'ADDON';
-export type RecipeLineType = 'PHOI' | 'NHAN_CHINH' | 'NHAN_PHU' | 'TRANG_TRI';
-
 export interface RecipeLine {
-  ingredientId?:    string | null;   // XOR with semiProductId
-  ingredientCode?:  string | null;
-  ingredientName?:  string | null;
-  semiProductId?:   string | null;   // XOR with ingredientId
-  semiProductCode?: string | null;
-  quantityGram: number;
-  lineType: RecipeLineType;
-  note?: string;
+  id: string;
+  item?: Item | null;
+  quantity: number;
+  unit: string;
+  sortOrder?: number;
 }
 
 export interface Recipe {
   id: string;
   version: number;
-  isActive: boolean;
-  effectiveDate: string;       // yyyy-MM-dd
-  recipeType: RecipeType;
+  active: boolean;
   approvalStatus?: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
   note?: string;
+  product?: Item | null;
+  semiProduct?: Item | null;
   lines: RecipeLine[];
 }
 
@@ -233,19 +227,15 @@ export interface Recipe {
 export interface RecipeRequest {
   productId?: string;
   semiProductId?: string;
-  effectiveDate?: string;
-  isActive?: boolean;
   note?: string;
-  recipeType?: RecipeType;
   lines: RecipeLineRequest[];
 }
 
 export interface RecipeLineRequest {
-  ingredientId?: string;
-  semiProductId?: string;
-  quantityGram: number;
-  lineType: RecipeLineType;
-  note?: string;
+  itemId: string;
+  quantity: number;
+  unit: string;
+  sortOrder?: number;
 }
 
 /** PUT /master/recipes/{id} */

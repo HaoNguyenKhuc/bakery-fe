@@ -86,29 +86,25 @@ const dummyRecipes: Recipe[] = [
 
 interface RecipeLineRow {
   rowKey: string;
-  ingredientId?: string;
-  semiProductId?: string;
-  ingredientName?: string;
-  quantityGram: number;
-  lineType: RecipeLineType;
-  note?: string;
-  sourceType: 'ingredient' | 'semi-product';
+  itemId?: string;
+  quantity: number;
+  unit: string;
 }
 
 interface RecipeLineEditorProps {
   lines: RecipeLineRow[];
   onChange: (lines: RecipeLineRow[]) => void;
+  allItems: any[]; // Or Item[]
 }
 
-const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) => {
+const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange, allItems }) => {
   const addLine = () => {
     onChange([
       ...lines,
       {
         rowKey: crypto.randomUUID(),
-        sourceType: 'ingredient',
-        quantityGram: 0,
-        lineType: 'PHOI',
+        quantity: 0,
+        unit: 'g',
       },
     ]);
   };
@@ -123,50 +119,35 @@ const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) 
 
   const columns: ColumnsType<RecipeLineRow> = [
     {
-      title: 'Nguồn',
-      dataIndex: 'sourceType',
-      width: 130,
+      title: 'Nguyên Liệu / Bán Thành Phẩm',
+      dataIndex: 'itemId',
       render: (v: string, record) => (
         <Select
           size="small"
+          showSearch
+          placeholder="Tìm và chọn nguyên liệu..."
           value={v}
-          onChange={(val) =>
-            updateLine(record.rowKey, {
-              sourceType: val as 'ingredient' | 'semi-product',
-              ingredientId: undefined,
-              semiProductId: undefined,
-              ingredientName: undefined,
-            })
+          onChange={(val) => {
+            const selectedItem = allItems.find(i => i.id === val);
+            updateLine(record.rowKey, { 
+              itemId: val,
+              unit: selectedItem?.unit || record.unit
+            });
+          }}
+          filterOption={(input, option) =>
+            (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
           }
+          options={allItems.map(i => ({
+            value: i.id,
+            label: `[${i.code}] ${i.name}`
+          }))}
           style={{ width: '100%' }}
-        >
-          <Select.Option value="ingredient">Nguyên liệu</Select.Option>
-          <Select.Option value="semi-product">Bán thành phẩm</Select.Option>
-        </Select>
-      ),
-    },
-    {
-      title: 'Tên',
-      dataIndex: 'ingredientName',
-      render: (v: string, record) => (
-        <Input
-          size="small"
-          placeholder={record.sourceType === 'ingredient' ? 'Tên nguyên liệu...' : 'Mã bán thành phẩm...'}
-          value={v}
-          onChange={(e) =>
-            updateLine(record.rowKey, {
-              ingredientName: e.target.value,
-              ...(record.sourceType === 'ingredient'
-                ? { ingredientId: e.target.value }
-                : { semiProductId: e.target.value }),
-            })
-          }
         />
       ),
     },
     {
-      title: 'Khối Lượng (g)',
-      dataIndex: 'quantityGram',
+      title: 'Số Lượng',
+      dataIndex: 'quantity',
       width: 140,
       render: (v: number, record) => (
         <InputNumber
@@ -174,39 +155,20 @@ const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) 
           min={0}
           value={v}
           style={{ width: '100%' }}
-          onChange={(val) => updateLine(record.rowKey, { quantityGram: val ?? 0 })}
-          suffix="g"
+          onChange={(val) => updateLine(record.rowKey, { quantity: val ?? 0 })}
         />
       ),
     },
     {
-      title: 'Loại Dòng',
-      dataIndex: 'lineType',
-      width: 140,
-      render: (v: RecipeLineType, record) => (
-        <Select
-          size="small"
-          value={v}
-          onChange={(val) => updateLine(record.rowKey, { lineType: val })}
-          style={{ width: '100%' }}
-        >
-          {LINE_TYPE_OPTIONS.map((opt) => (
-            <Select.Option key={opt.value} value={opt.value}>
-              {opt.label}
-            </Select.Option>
-          ))}
-        </Select>
-      ),
-    },
-    {
-      title: 'Ghi Chú',
-      dataIndex: 'note',
+      title: 'Đơn Vị',
+      dataIndex: 'unit',
+      width: 120,
       render: (v: string, record) => (
         <Input
           size="small"
-          placeholder="Ghi chú..."
+          placeholder="Đơn vị..."
           value={v}
-          onChange={(e) => updateLine(record.rowKey, { note: e.target.value })}
+          onChange={(e) => updateLine(record.rowKey, { unit: e.target.value })}
         />
       ),
     },
@@ -254,12 +216,13 @@ const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange }) 
 interface CreateRecipeModalProps {
   open: boolean;
   item: Product;
+  allItems: any[];
   onClose: () => void;
   onSuccess: () => void;
 }
 
 const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
-  open, item, onClose, onSuccess,
+  open, item, allItems, onClose, onSuccess,
 }) => {
   const [form] = Form.useForm();
   const [lines, setLines] = useState<RecipeLineRow[]>([]);
@@ -292,21 +255,15 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
     }
 
     const recipeLines: RecipeLineRequest[] = lines.map((l) => ({
-      ingredientId: l.sourceType === 'ingredient' ? l.ingredientId : undefined,
-      semiProductId: l.sourceType === 'semi-product' ? l.semiProductId : undefined,
-      quantityGram: l.quantityGram,
-      lineType: l.lineType,
-      note: l.note,
+      itemId: l.itemId!,
+      quantity: l.quantity,
+      unit: l.unit,
     }));
 
     createMutation.mutate({
       productId: item.itemType === 'PRODUCT' ? item.id : undefined,
       semiProductId: item.itemType === 'SEMI_PRODUCT' ? item.id : undefined,
-      effectiveDate: values.effectiveDate
-        ? dayjs(values.effectiveDate).format('YYYY-MM-DD')
-        : dayjs().format('YYYY-MM-DD'),
       note: values.note,
-      recipeType: values.recipeType || 'BASE',
       lines: recipeLines,
     });
   };
@@ -332,20 +289,7 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
       />
       <Form form={form} layout="vertical">
         <Row gutter={16}>
-          <Col xs={24} sm={8}>
-            <Form.Item name="recipeType" label="Loại Công Thức" initialValue="BASE">
-              <Select>
-                <Select.Option value="BASE">BASE (Tiêu chuẩn)</Select.Option>
-                <Select.Option value="ADDON">ADDON (Tùy chỉnh)</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={8}>
-            <Form.Item name="effectiveDate" label="Ngày Hiệu Lực">
-              <Input type="date" />
-            </Form.Item>
-          </Col>
-          <Col xs={24} sm={8}>
+          <Col xs={24}>
             <Form.Item name="note" label="Ghi Chú">
               <Input placeholder="Lý do tạo phiên bản mới..." />
             </Form.Item>
@@ -354,7 +298,7 @@ const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
       </Form>
 
       <Divider>Danh Sách Nguyên Liệu</Divider>
-      <RecipeLineEditor lines={lines} onChange={setLines} />
+      <RecipeLineEditor lines={lines} onChange={setLines} allItems={allItems} />
     </Modal>
   );
 };
@@ -369,7 +313,7 @@ interface RecipeVersionListProps {
 
 const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, productId }) => {
   const [expandedVersion, setExpandedVersion] = useState<string | null>(
-    recipes.find((r) => r.isActive)?.id || null,
+    recipes.find((r) => r.active)?.id || null,
   );
   
   const queryClient = useQueryClient();
@@ -426,13 +370,13 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
           key={recipe.id}
           size="small"
           style={{
-            border: recipe.isActive ? '2px solid #52c41a' : '1px solid #d9d9d9',
+            border: recipe.active ? '2px solid #52c41a' : '1px solid #d9d9d9',
             borderRadius: 8,
           }}
           title={
             <Space>
               <Text strong>Phiên bản v{recipe.version}</Text>
-              {recipe.isActive ? (
+              {recipe.active ? (
                 <Tag icon={<CheckCircleOutlined />} color="success">
                   Đang dùng
                 </Tag>
@@ -450,14 +394,6 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
                   {recipe.approvalStatus}
                 </Tag>
               )}
-              {recipe.recipeType === 'ADDON' && (
-                <Tag color="orange" icon={<ExperimentOutlined />}>
-                  ADDON
-                </Tag>
-              )}
-              <Text type="secondary" style={{ fontSize: 12 }}>
-                Hiệu lực: {dayjs(recipe.effectiveDate).format('DD/MM/YYYY')}
-              </Text>
               {recipe.note && (
                 <Text type="secondary" style={{ fontSize: 12 }}>
                   — {recipe.note}
@@ -473,7 +409,7 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
                   <Button size="small" danger loading={rejectMut.isPending} onClick={() => rejectMut.mutate(recipe.id)}>Từ chối</Button>
                 </>
               )}
-              {recipe.approvalStatus === 'APPROVED' && !recipe.isActive && (
+              {recipe.approvalStatus === 'APPROVED' && !recipe.active && (
                 <Button size="small" loading={activateMut.isPending} onClick={() => activateMut.mutate(recipe.id)}>Kích hoạt</Button>
               )}
               <Button size="small" loading={cloneMut.isPending} onClick={() => cloneMut.mutate(recipe.id)}>Nhân bản</Button>
@@ -505,7 +441,7 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
                   title: 'Nguyên Liệu',
                   key: 'name',
                   render: (_: unknown, line: RecipeLine) =>
-                    line.ingredientName || line.semiProductCode || '—',
+                    line.item?.name || '—',
                 },
                 {
                   title: 'Mã',
@@ -513,35 +449,20 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
                   width: 100,
                   render: (_: unknown, line: RecipeLine) => (
                     <Text code style={{ fontSize: 12 }}>
-                      {line.ingredientCode || line.semiProductCode || '—'}
+                      {line.item?.code || '—'}
                     </Text>
                   ),
                 },
                 {
-                  title: 'Khối Lượng',
-                  dataIndex: 'quantityGram',
+                  title: 'Số Lượng',
+                  dataIndex: 'quantity',
                   width: 120,
                   align: 'right',
-                  render: (v: number) => `${v}g`,
                 },
                 {
-                  title: 'Loại Dòng',
-                  dataIndex: 'lineType',
+                  title: 'Đơn Vị',
+                  dataIndex: 'unit',
                   width: 120,
-                  render: (v: RecipeLineType) => (
-                    <Tag color={LINE_TYPE_COLORS[v]}>{LINE_TYPE_LABELS[v]}</Tag>
-                  ),
-                },
-                {
-                  title: 'Loại',
-                  key: 'sourceType',
-                  width: 130,
-                  render: (_: unknown, line: RecipeLine) =>
-                    line.ingredientId ? (
-                      <Tag color="blue">Nguyên liệu</Tag>
-                    ) : (
-                      <Tag color="geekblue">Bán thành phẩm</Tag>
-                    ),
                 },
               ]}
               summary={() => (
@@ -551,10 +472,10 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
                   </Table.Summary.Cell>
                   <Table.Summary.Cell index={2} align="right">
                     <Text strong>
-                      {recipe.lines.reduce((s, l) => s + l.quantityGram, 0)}g
+                      {recipe.lines.reduce((s, l) => s + l.quantity, 0)}
                     </Text>
                   </Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} colSpan={2} />
+                  <Table.Summary.Cell index={3} />
                 </Table.Summary.Row>
               )}
             />
@@ -573,11 +494,11 @@ const RecipePage: React.FC = () => {
 
   const { data: productsData } = useQuery({
     queryKey: ['products', 'recipes_items'],
-    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT,SEMI_PRODUCT', approvalStatus: 'APPROVED' }),
+    queryFn: () => itemService.getAllItems({ search: '', approvalStatus: 'APPROVED', page: 0, size: 500 }),
     retry: 1,
   });
 
-  const products = Array.isArray(productsData) ? productsData : dummyProducts;
+  const products = productsData?.content || dummyProducts;
 
   const selectedProduct = products.find((p) => p.id === selectedProductId) || null;
 
@@ -593,10 +514,10 @@ const RecipePage: React.FC = () => {
     retry: 1,
   });
 
-  const recipes: Recipe[] = Array.isArray(recipesData) ? recipesData : (selectedProductId === '1' ? dummyRecipes : []);
+  const recipes: Recipe[] = recipesData?.content || (selectedProductId === '1' ? dummyRecipes : []);
 
   const sortedRecipes = [...recipes].sort((a, b) => b.version - a.version);
-  const activeRecipe = sortedRecipes.find((r) => r.isActive);
+  const activeRecipe = sortedRecipes.find((r) => r.active);
 
   return (
     <div>
@@ -693,6 +614,7 @@ const RecipePage: React.FC = () => {
         <CreateRecipeDrawer
           open={createDrawerOpen}
           item={selectedProduct}
+          allItems={products}
           onClose={() => setCreateDrawerOpen(false)}
           onSuccess={() => setCreateDrawerOpen(false)}
         />

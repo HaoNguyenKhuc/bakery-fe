@@ -5,12 +5,12 @@ const recipeService = {
   // ── Queries ──────────────────────────────────────
 
   getByProduct: (productId: string) =>
-    api.get<Recipe[]>(`/api/v1/recipes/by-product/${productId}`),
+    api.get<any>('/api/v1/recipes', { productId }),
 
   getBySemiProduct: (semiProductId: string) =>
-    api.get<Recipe[]>(`/api/v1/recipes/by-semi/${semiProductId}`),
+    api.get<any>('/api/v1/recipes', { semiProductId }),
 
-  getAll: () => api.get<Recipe[]>('/api/v1/recipes/all'),
+  getAll: () => api.get<any>('/api/v1/recipes'),
 
   getById: (id: string) => api.get<Recipe>(`/api/v1/recipes/${id}`),
 
