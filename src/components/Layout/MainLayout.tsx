@@ -38,6 +38,8 @@ interface BreadcrumbMap {
 const breadcrumbNameMap: BreadcrumbMap = {
   '/': 'Tổng Quan',
   '/products': 'Danh Sách Sản Phẩm',
+  '/products/create': 'Thêm Hàng Hoá Mới',
+  '/products/edit': 'Chỉnh Sửa Hàng Hoá',
   '/products/recipes': 'Công Thức',
   '/products/cost-price': 'Giá Cost',
   '/warehouse': 'Kho',

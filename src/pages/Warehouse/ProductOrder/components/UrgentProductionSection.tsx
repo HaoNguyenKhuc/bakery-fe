@@ -13,8 +13,9 @@ import dayjs from 'dayjs';
 import type { UrgentProduction, UrgentProductionRequest } from '../../../../types';
 import { useAuthStore } from '../../../../store';
 
+import { useNavigate } from 'react-router-dom';
+
 const { Text, Title } = Typography;
-const { TextArea } = Input;
 
 // ─── Dummy data ───────────────────────────────────────────────────────────────
 

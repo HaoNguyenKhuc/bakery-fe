@@ -14,11 +14,10 @@ import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { transactionService, inventoryService } from '../../../api/services';
 import { useWarehouseStore } from '../../../store';
-import PurchaseModal from '../components/PurchaseModal';
-import TransferModal from '../components/TransferModal';
 import RejectModal from '../components/RejectModal';
-import StockDetailModal from '../components/StockDetailModal';
-import AdjustModal from '../components/AdjustModal';
+
+import { useNavigate } from 'react-router-dom';
+
 import type {
   InventoryLot,
   UnifiedTransactionResponse,
@@ -57,133 +56,16 @@ const TYPE_COLOR: Record<TransactionType, string> = {
 
 // ─── Return-to-Main Modal ─────────────────────────────────────────────────────
 
-interface ReturnModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (values: UnifiedTransactionRequest) => void;
-  submitting: boolean;
-}
 
-const ReturnModal: React.FC<ReturnModalProps> = ({ open, onClose, onSubmit, submitting }) => {
-  const [form] = Form.useForm();
-  const [lines, setLines] = useState<UnifiedTransactionLine[]>([
-    { itemCode: '', itemName: '', unit: 'KG', quantity: 1, note: '' },
-  ]);
-
-  React.useEffect(() => {
-    if (open) {
-      form.resetFields();
-      setLines([{ itemCode: '', itemName: '', unit: 'KG', quantity: 1, note: '' }]);
-    }
-  }, [open, form]);
-
-  const addLine = () => setLines((prev) => [...prev, { itemCode: '', itemName: '', unit: 'KG', quantity: 1, note: '' }]);
-  const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
-  const updateLine = (i: number, field: keyof UnifiedTransactionLine, value: string | number) => {
-    setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
-  };
-
-  const handleOk = () => {
-    form.validateFields().then((values) => {
-      const payload: UnifiedTransactionRequest = {
-        type: 'TRANSFER',
-        fromBranchId: '',
-        toBranchId: '',
-        note: values.note,
-        lines,
-      };
-      onSubmit(payload);
-    });
-  };
-
-  return (
-    <Modal
-      wrapClassName="fullscreen-modal-wrap"
-      title={
-        <Space>
-          <RollbackOutlined style={{ color: '#fa8c16' }} />
-          Xuất Trả Nguyên Liệu Hư → Kho Tổng
-        </Space>
-      }
-      open={open}
-      onCancel={onClose}
-      onOk={handleOk}
-      okText="Gửi Phiếu Xuất Trả (Chờ Duyệt)"
-      okButtonProps={{ danger: true }}
-      cancelText="Huỷ"
-      confirmLoading={submitting}
-      width={680}
-      destroyOnClose
-    >
-      <Alert
-        type="warning"
-        showIcon
-        message="Phiếu xuất trả nguyên liệu hư hỏng về Kho Tổng. Cần ghi rõ lý do để Admin xem xét và duyệt."
-        style={{ marginBottom: 16 }}
-      />
-      <Form form={form} layout="vertical">
-        <Form.Item name="note" label="Lý Do / Ghi Chú" rules={[{ required: true, message: 'Vui lòng ghi rõ lý do trả hàng' }]}>
-          <Input.TextArea rows={2} placeholder="VD: Bơ bị mốc do bảo quản sai nhiệt độ..." />
-        </Form.Item>
-      </Form>
-
-      <Divider>Danh Sách Nguyên Liệu Trả</Divider>
-
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
-        {lines.map((line, i) => (
-          <Row key={i} gutter={8} align="middle">
-            <Col span={12}>
-              <Input
-                placeholder="Mã NL"
-                value={line.itemCode}
-                onChange={(e) => updateLine(i, 'itemCode', e.target.value)}
-                style={{ fontFamily: 'monospace' }}
-              />
-            </Col>
-            <Col span={8}>
-              <InputNumber
-                min={0.01}
-                value={line.quantity}
-                onChange={(v) => updateLine(i, 'quantity', v ?? 1)}
-                style={{ width: '100%' }}
-                placeholder="SL"
-              />
-            </Col>
-            <Col span={4}>
-              <Tooltip title="Xoá dòng">
-                <Button
-                  danger
-                  type="text"
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeLine(i)}
-                  disabled={lines.length === 1}
-                />
-              </Tooltip>
-            </Col>
-          </Row>
-        ))}
-        <Button type="dashed" icon={<PlusOutlined />} onClick={addLine} style={{ width: '100%' }}>
-          Thêm Dòng
-        </Button>
-      </Space>
-    </Modal>
-  );
-};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const KitchenWarehouse: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
-  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
-  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<UnifiedTransactionResponse | null>(null);
-
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
-  const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
 
   // ── Warehouse data from global store (loaded in MainLayout) ──────────────────
 
@@ -231,27 +113,11 @@ const KitchenWarehouse: React.FC = () => {
   const pendingReceipts: UnifiedTransactionResponse[] = pendingData ?? [];
   const rejectedReceipts: UnifiedTransactionResponse[] = rejectedData ?? [];
 
+  const navigate = useNavigate();
+
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
-  const createTransferMutation = useMutation({
-    mutationFn: (data: TransferRequest) => inventoryService.createRequest(data),
-    onSuccess: () => {
-      message.success('Đã tạo phiếu xuất kho thành công. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['warehouse', 'kitchen', 'requests'] });
-      setReturnModalOpen(false);
-    },
-    onError: () => message.error('Tạo phiếu xuất thất bại. Vui lòng thử lại.'),
-  });
 
-  const createAdjustMutation = useMutation({
-    mutationFn: (data: import('../../../types').AdjustRequest) => inventoryService.createRequest(data),
-    onSuccess: () => {
-      message.success('Đã tạo phiếu điều chỉnh thành công. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['warehouse', 'kitchen', 'requests'] });
-      setAdjustModalOpen(false);
-    },
-    onError: () => message.error('Tạo phiếu điều chỉnh thất bại. Vui lòng thử lại.'),
-  });
 
   const createPurchaseMutation = useMutation({
     mutationFn: (data: PurchaseRequest) => inventoryService.createRequest(data),
@@ -441,6 +307,19 @@ const KitchenWarehouse: React.FC = () => {
         </Text>
       ),
     },
+    {
+      title: '',
+      key: 'action',
+      width: 50,
+      render: (_, r) => (
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
+          size="small"
+          onClick={() => navigate(`/warehouse/stock/${khoBep?.code || 'KITCHEN'}/${r.item.code}`)}
+        />
+      ),
+    },
   ];
 
   // ── Action buttons ────────────────────────────────────────────────────────────
@@ -449,19 +328,26 @@ const KitchenWarehouse: React.FC = () => {
     <Space>
       <Button
         icon={<ImportOutlined />}
-        onClick={() => setImportModalOpen(true)}
+        onClick={() => navigate('/warehouse/main/purchase')}
       >
         Nhập Kho
       </Button>
       <Button
         icon={<ExportOutlined />}
-        onClick={() => setReturnModalOpen(true)}
+        onClick={() => navigate('/warehouse/transfer/KITCHEN')}
       >
         Xuất Kho
       </Button>
       <Button
+        icon={<RollbackOutlined />}
+        danger
+        onClick={() => navigate('/warehouse/kitchen/return')}
+      >
+        Xuất Trả
+      </Button>
+      <Button
         icon={<FormOutlined />}
-        onClick={() => setAdjustModalOpen(true)}
+        onClick={() => navigate('/warehouse/adjust/KITCHEN')}
       >
         Điều Chỉnh
       </Button>
@@ -590,14 +476,6 @@ const KitchenWarehouse: React.FC = () => {
           rowKey={(r) => r.item.key}
           size="middle"
           pagination={{ pageSize: 15, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} mặt hàng` }}
-          onRow={(record) => ({
-            onClick: () => {
-              setSelectedItemKey(record.item.key);
-              setSelectedItemName(record.item.name);
-              setDetailModalOpen(true);
-            },
-            style: { cursor: 'pointer' },
-          })}
           locale={{
             emptyText: (
               <Empty
@@ -634,24 +512,6 @@ const KitchenWarehouse: React.FC = () => {
 
       <Tabs defaultActiveKey="phieu-nhap" items={outerTabItems} />
 
-      <TransferModal
-        open={returnModalOpen}
-        onClose={() => setReturnModalOpen(false)}
-        onSubmit={(values) => createTransferMutation.mutate(values)}
-        submitting={createTransferMutation.isPending}
-        sourceWarehouseId={khoBepId!}
-        warehouseCode={khoBep?.code || 'KITCHEN'}
-        useStockData={true}
-      />
-
-      <PurchaseModal
-        open={importModalOpen}
-        onClose={() => setImportModalOpen(false)}
-        onSubmit={(values) => createPurchaseMutation.mutate(values)}
-        submitting={createPurchaseMutation.isPending}
-        targetWarehouseId={khoBepId!}
-      />
-
       <RejectModal
         open={rejectModalOpen}
         onClose={() => {
@@ -661,31 +521,6 @@ const KitchenWarehouse: React.FC = () => {
         onSubmit={(id, payload) => rejectMutation.mutate({ id, payload })}
         submitting={rejectMutation.isPending}
         record={selectedRecord}
-      />
-
-      <StockDetailModal
-        open={detailModalOpen}
-        onClose={() => {
-          setDetailModalOpen(false);
-          setSelectedItemKey(null);
-          setSelectedItemName(null);
-        }}
-        itemCode={selectedItemKey}
-        itemName={selectedItemName}
-        warehouseCode={khoBep?.code || 'KITCHEN'}
-      />
-
-      <AdjustModal
-        open={adjustModalOpen}
-        onClose={() => setAdjustModalOpen(false)}
-        onSubmit={(payload) => {
-          createAdjustMutation.mutate(payload, {
-            onSuccess: () => setAdjustModalOpen(false),
-          });
-        }}
-        submitting={createAdjustMutation.isPending}
-        targetWarehouseId={khoBep?.id || ''}
-        warehouseCode={khoBep?.code || 'KITCHEN'}
       />
     </div>
   );

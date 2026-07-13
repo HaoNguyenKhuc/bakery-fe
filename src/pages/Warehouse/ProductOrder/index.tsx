@@ -6,7 +6,7 @@ import {
 } from 'antd';
 import {
   ShoppingOutlined, PlusOutlined, EyeOutlined,
-  CalendarOutlined, FilterOutlined, LockOutlined,
+  CalendarOutlined, FilterOutlined, LockOutlined, EditOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -17,8 +17,7 @@ import type {
   ProductOrderRequest, CustomRecipeUpdateRequest,
 } from '../../../types';
 import { useAuthStore } from '../../../store';
-import CreateOrderModal from './components/CreateOrderModal';
-import OrderDetailDrawer from './components/OrderDetailDrawer';
+import { useNavigate } from 'react-router-dom';
 import UrgentProductionSection from './components/UrgentProductionSection';
 
 const { Title, Text } = Typography;
@@ -134,9 +133,7 @@ const ProductOrderPage: React.FC = () => {
 
   // ── UI State ─────────────────────────────────────────────────────────────────
 
-  const [createOpen, setCreateOpen]           = useState(false);
-  const [detailOrder, setDetailOrder]         = useState<ProductOrder | null>(null);
-  const [drawerOpen, setDrawerOpen]           = useState(false);
+  const navigate = useNavigate();
 
   // ── Data ─────────────────────────────────────────────────────────────────────
 
@@ -160,16 +157,6 @@ const ProductOrderPage: React.FC = () => {
 
   // ── Mutations ────────────────────────────────────────────────────────────────
 
-  const createMutation = useMutation({
-    mutationFn: async (_req: ProductOrderRequest) => { throw new Error('API not ready'); },
-    onSuccess: () => {
-      message.success('✅ Đã tạo đơn hàng thành công!');
-      queryClient.invalidateQueries({ queryKey: ['product-orders'] });
-      setCreateOpen(false);
-    },
-    onError: () => message.warning('API chưa sẵn sàng — đơn hàng đã được ghi nhận (demo).'),
-  });
-
   const saveRecipeMutation = useMutation({
     mutationFn: async (_req: CustomRecipeUpdateRequest) => { throw new Error('API not ready'); },
     onSuccess: () => {
@@ -181,10 +168,6 @@ const ProductOrderPage: React.FC = () => {
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
-  const openDetail = (order: ProductOrder) => {
-    setDetailOrder(order);
-    setDrawerOpen(true);
-  };
 
   const clearFilters = () => {
     setDeliveryDate(null);
@@ -284,14 +267,24 @@ const ProductOrderPage: React.FC = () => {
       width: 60,
       align: 'center',
       render: (_: unknown, r: ProductOrder) => (
-        <Tooltip title="Xem chi tiết">
-          <Button
-            type="text"
-            icon={<EyeOutlined />}
-            size="small"
-            onClick={() => openDetail(r)}
-          />
-        </Tooltip>
+        <Space size={4}>
+          <Tooltip title="Xem chi tiết">
+            <Button
+              type="text"
+              icon={<EyeOutlined />}
+              size="small"
+              onClick={() => navigate(`/warehouse/product-orders/${r.orderId}`)}
+            />
+          </Tooltip>
+          <Tooltip title="Chỉnh sửa">
+            <Button
+              type="text"
+              icon={<EditOutlined style={{ color: '#1890ff' }} />}
+              size="small"
+              onClick={() => navigate(`/warehouse/product-orders/edit/${r.orderId}`)}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -319,7 +312,7 @@ const ProductOrderPage: React.FC = () => {
               icon={<PlusOutlined />}
               size="large"
               style={{ background: '#D2691E', borderColor: '#D2691E', fontWeight: 600 }}
-              onClick={() => setCreateOpen(true)}
+              onClick={() => navigate('/warehouse/product-orders/create')}
             >
               Tạo Đơn Hàng
             </Button>
@@ -450,21 +443,7 @@ const ProductOrderPage: React.FC = () => {
       {/* ── Urgent Production (chỉ Bếp trưởng) ── */}
       {isBepTruong && <UrgentProductionSection />}
 
-      {/* ── Modals & Drawers ── */}
-      <CreateOrderModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        onSubmit={(req) => createMutation.mutate(req)}
-        submitting={createMutation.isPending}
-      />
 
-      <OrderDetailDrawer
-        order={detailOrder}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSaveRecipe={(req) => saveRecipeMutation.mutate(req)}
-        savingRecipe={saveRecipeMutation.isPending}
-      />
 
       {/* Cảnh báo nếu không có quyền xem */}
       {!canView && (

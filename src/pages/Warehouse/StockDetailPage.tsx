@@ -1,32 +1,23 @@
 import React from 'react';
-import { Modal, Table, Typography } from 'antd';
+import { Table, Typography, Card, Button, Divider, Space } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeftOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import { inventoryService } from '../../../api/services';
-import type { StockLotDetail } from '../../../types';
+import { inventoryService } from '../../api/services';
+import type { StockLotDetail } from '../../types';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
-interface StockDetailModalProps {
-  open: boolean;
-  onClose: () => void;
-  itemCode: string | null;
-  itemName: string | null;
-  warehouseCode: string;
-}
+const StockDetailPage: React.FC = () => {
+  const { warehouseCode, itemCode } = useParams<{ warehouseCode: string; itemCode: string }>();
+  const navigate = useNavigate();
 
-const StockDetailModal: React.FC<StockDetailModalProps> = ({
-  open,
-  onClose,
-  itemCode,
-  itemName,
-  warehouseCode,
-}) => {
   const { data: detailData, isLoading } = useQuery({
     queryKey: ['stock-lots-detail', itemCode, warehouseCode],
-    queryFn: () => inventoryService.getStockLotsByItem(itemCode!, warehouseCode),
-    enabled: !!itemCode && open,
+    queryFn: () => inventoryService.getStockLotsByItem(itemCode!, warehouseCode!),
+    enabled: !!itemCode && !!warehouseCode,
   });
 
   const columns: ColumnsType<StockLotDetail> = [
@@ -83,30 +74,36 @@ const StockDetailModal: React.FC<StockDetailModalProps> = ({
   ];
 
   return (
-    <Modal
-      title={`Chi tiết lô hàng: ${itemName || '---'}`}
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      wrapClassName="fullscreen-modal-wrap"
-      destroyOnClose
-    >
-      <Table
-        rowKey="id"
-        size="small"
-        columns={columns}
-        dataSource={detailData?.content || []}
-        loading={isLoading}
-        pagination={{
-          total: detailData?.totalElements || 0,
-          current: (detailData?.page || 0) + 1,
-          pageSize: detailData?.size || 20,
-          showSizeChanger: false,
-        }}
-        scroll={{ y: 'calc(100vh - 250px)' }}
-      />
-    </Modal>
+    <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24 }}>
+        <Space>
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate(-1)}>
+            Quay Lại
+          </Button>
+          <Divider type="vertical" />
+          <Title level={3} style={{ margin: 0 }}>
+            Chi tiết lô hàng: {itemCode}
+          </Title>
+        </Space>
+      </div>
+
+      <Card>
+        <Table
+          rowKey="id"
+          size="small"
+          columns={columns}
+          dataSource={detailData?.content || []}
+          loading={isLoading}
+          pagination={{
+            pageSize: 20,
+            showSizeChanger: false,
+          }}
+          bordered
+          locale={{ emptyText: 'Chưa có thông tin lô hàng.' }}
+        />
+      </Card>
+    </div>
   );
 };
 
-export default StockDetailModal;
+export default StockDetailPage;

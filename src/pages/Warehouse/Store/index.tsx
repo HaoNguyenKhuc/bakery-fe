@@ -24,11 +24,9 @@ import type {
 } from '../../../types';
 import { transactionService, inventoryService } from '../../../api/services';
 import { useWarehouseStore } from '../../../store';
-import PurchaseModal from '../components/PurchaseModal';
-import TransferModal from '../components/TransferModal';
 import RejectModal from '../components/RejectModal';
-import StockDetailModal from '../components/StockDetailModal';
-import AdjustModal from '../components/AdjustModal';
+import { useNavigate } from 'react-router-dom';
+
 
 const { Title, Text } = Typography;
 
@@ -54,133 +52,17 @@ const TYPE_COLOR: Record<TransactionType, string> = {
   STOCK_COUNT: 'purple',
 };
 
-// ─── Order Modal ──────────────────────────────────────────────────────────────
 
-interface OrderModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (values: UnifiedTransactionRequest) => void;
-  submitting: boolean;
-  khoTongId?: string;
-  storeId?: string;
-}
-
-const OrderModal: React.FC<OrderModalProps> = ({ open, onClose, onSubmit, submitting, khoTongId, storeId }) => {
-  const [form] = Form.useForm();
-  const [lines, setLines] = useState<{ ingredientCode: string; qty: number }[]>([
-    { ingredientCode: '', qty: 1 },
-  ]);
-
-  React.useEffect(() => {
-    if (open) {
-      form.resetFields();
-      setLines([{ ingredientCode: '', qty: 1 }]);
-    }
-  }, [open, form]);
-
-  const addLine = () => setLines((prev) => [...prev, { ingredientCode: '', qty: 1 }]);
-  const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
-  const updateLine = (i: number, field: 'ingredientCode' | 'qty', value: any) => {
-    setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
-  };
-
-  const handleOk = () => {
-    form.validateFields().then((values) => {
-      onSubmit({
-        type: 'TRANSFER',
-        fromBranchId: khoTongId,
-        toBranchId: storeId,
-        note: values.note,
-        lines: lines.map(l => ({ ingredientCode: l.ingredientCode, qty: l.qty })),
-      });
-    });
-  };
-
-  return (
-    <Modal
-      wrapClassName="fullscreen-modal-wrap"
-      title={
-        <Space>
-          <ShoppingCartOutlined style={{ color: '#1890ff' }} />
-          Yêu Cầu Thêm Bánh
-        </Space>
-      }
-      open={open}
-      onCancel={onClose}
-      onOk={handleOk}
-      okText="Gửi Yêu Cầu (Chờ Duyệt)"
-      cancelText="Huỷ"
-      confirmLoading={submitting}
-      width={680}
-      destroyOnClose
-    >
-      <Alert
-        type="info"
-        showIcon
-        message="Đơn yêu cầu sẽ ở trạng thái Chờ Duyệt cho đến khi Kho Tổng phê duyệt."
-        style={{ marginBottom: 16 }}
-      />
-      <Form form={form} layout="vertical">
-        <Form.Item name="note" label="Ghi Chú / Lý Do">
-          <Input.TextArea rows={2} placeholder="VD: Bánh Tiramisu hết sạch từ 9h sáng, cần bổ sung gấp..." />
-        </Form.Item>
-      </Form>
-
-      <Divider>Danh Sách Bánh Yêu Cầu</Divider>
-
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
-        {lines.map((line, i) => (
-          <Row key={i} gutter={8} align="middle">
-            <Col span={15}>
-              <Input
-                placeholder="Mã SP (VD: BM001)"
-                value={line.ingredientCode}
-                onChange={(e) => updateLine(i, 'ingredientCode', e.target.value)}
-                style={{ fontFamily: 'monospace' }}
-              />
-            </Col>
-            <Col span={6}>
-              <InputNumber
-                min={1}
-                value={line.qty}
-                onChange={(v) => updateLine(i, 'qty', v ?? 1)}
-                style={{ width: '100%' }}
-                placeholder="SL"
-              />
-            </Col>
-            <Col span={3}>
-              <Button
-                danger
-                type="text"
-                icon={<PlusOutlined style={{ transform: 'rotate(45deg)' }} />}
-                onClick={() => removeLine(i)}
-                disabled={lines.length === 1}
-              />
-            </Col>
-          </Row>
-        ))}
-        <Button type="dashed" icon={<PlusOutlined />} onClick={addLine} style={{ width: '100%' }}>
-          Thêm Bánh
-        </Button>
-      </Space>
-    </Modal>
-  );
-};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const StoreWarehouse: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
-  const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [adjustModalOpen, setAdjustModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<UnifiedTransactionResponse | null>(null);
-
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
-  const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
 
   // ── Warehouse data from global store (loaded in MainLayout) ──────────────────
 
@@ -247,25 +129,6 @@ const StoreWarehouse: React.FC = () => {
       setOrderModalOpen(false);
     },
     onError: () => message.error('Tạo phiếu nhập thất bại. Vui lòng thử lại.'),
-  });
-
-  const createTransferMutation = useMutation({
-    mutationFn: (data: TransferRequest) => inventoryService.createRequest(data),
-    onSuccess: () => {
-      message.success('Đã tạo phiếu xuất kho thành công. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['warehouse', 'store', 'requests'] });
-      setExportModalOpen(false);
-    },
-    onError: () => message.error('Tạo phiếu xuất thất bại. Vui lòng thử lại.'),
-  });
-
-  const createAdjustMutation = useMutation({
-    mutationFn: (data: import('../../../types').AdjustRequest) => inventoryService.createRequest(data),
-    onSuccess: () => {
-      message.success('Đã tạo phiếu điều chỉnh thành công. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['warehouse', 'store', 'requests'] });
-    },
-    onError: () => message.error('Tạo phiếu điều chỉnh thất bại. Vui lòng thử lại.'),
   });
 
   const approveMutation = useMutation({
@@ -421,6 +284,20 @@ const StoreWarehouse: React.FC = () => {
         </Text>
       ),
     },
+    {
+      title: 'Action',
+      key: 'action',
+      width: 80,
+      align: 'center',
+      render: (_, r) => (
+        <Button
+          type="text"
+          icon={<EyeOutlined />}
+          size="small"
+          onClick={() => navigate(`/warehouse/stock/${storeWarehouse?.code || 'STORE'}/${r.item.key}`)}
+        />
+      ),
+    },
   ];
 
   // ── Action buttons ────────────────────────────────────────────────────────────
@@ -429,20 +306,18 @@ const StoreWarehouse: React.FC = () => {
     <Space>
       <Button
         icon={<ImportOutlined />}
-        onClick={() => setOrderModalOpen(true)}
-      >
+        onClick={() => navigate('/warehouse/store/request')}      >
         Nhập Kho
       </Button>
       <Button
         icon={<ExportOutlined />}
-        onClick={() => setExportModalOpen(true)}
+        onClick={() => navigate('/warehouse/transfer/STORE')}
       >
         Xuất Kho
       </Button>
       <Button
         icon={<FormOutlined />}
-        onClick={() => setAdjustModalOpen(true)}
-      >
+        onClick={() => navigate('/warehouse/adjust/STORE')}      >
         Điều Chỉnh
       </Button>
     </Space>
@@ -570,14 +445,6 @@ const StoreWarehouse: React.FC = () => {
           rowKey={(r) => r.item.key}
           size="middle"
           pagination={{ pageSize: 15, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} mặt hàng` }}
-          onRow={(record) => ({
-            onClick: () => {
-              setSelectedItemKey(record.item.key);
-              setSelectedItemName(record.item.name);
-              setDetailModalOpen(true);
-            },
-            style: { cursor: 'pointer' },
-          })}
           locale={{
             emptyText: (
               <Empty
@@ -607,22 +474,6 @@ const StoreWarehouse: React.FC = () => {
 
       <Tabs defaultActiveKey="phieu-nhap" items={outerTabItems} />
 
-      <PurchaseModal
-        open={orderModalOpen}
-        onClose={() => setOrderModalOpen(false)}
-        onSubmit={(req) => createPurchaseMutation.mutate(req)}
-        submitting={createPurchaseMutation.isPending}
-        targetWarehouseId={storeId!}
-      />
-
-      <TransferModal
-        open={exportModalOpen}
-        onClose={() => setExportModalOpen(false)}
-        onSubmit={(req) => createTransferMutation.mutate(req)}
-        submitting={createTransferMutation.isPending}
-        sourceWarehouseId={storeId!}
-      />
-
       <RejectModal
         open={rejectModalOpen}
         onClose={() => {
@@ -634,30 +485,7 @@ const StoreWarehouse: React.FC = () => {
         record={selectedRecord}
       />
 
-      <StockDetailModal
-        open={detailModalOpen}
-        onClose={() => {
-          setDetailModalOpen(false);
-          setSelectedItemKey(null);
-          setSelectedItemName(null);
-        }}
-        itemCode={selectedItemKey}
-        itemName={selectedItemName}
-        warehouseCode={storeWarehouse?.code || 'STORE'}
-      />
 
-      <AdjustModal
-        open={adjustModalOpen}
-        onClose={() => setAdjustModalOpen(false)}
-        onSubmit={(payload) => {
-          createAdjustMutation.mutate(payload, {
-            onSuccess: () => setAdjustModalOpen(false),
-          });
-        }}
-        submitting={createAdjustMutation.isPending}
-        targetWarehouseId={storeWarehouse?.id || ''}
-        warehouseCode={storeWarehouse?.code || 'STORE'}
-      />
     </div>
   );
 };

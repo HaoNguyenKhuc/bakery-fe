@@ -14,7 +14,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
 import type { GoodsTransferSlip } from '../../../types';
 import { useAuthStore } from '../../../store';
-import SlipDetailDrawer from './components/SlipDetailDrawer';
+import { useNavigate } from 'react-router-dom';
 import RejectReasonModal from './components/RejectReasonModal';
 import ReadyConfirmModal from './components/ReadyConfirmModal';
 
@@ -126,8 +126,7 @@ const GoodsTransfer: React.FC = () => {
   // Local UI state
   const [searchText, setSearchText]       = useState('');
   const [dateRange, setDateRange]         = useState<[Dayjs | null, Dayjs | null] | null>(null);
-  const [detailSlip, setDetailSlip]       = useState<GoodsTransferSlip | null>(null);
-  const [drawerOpen, setDrawerOpen]       = useState(false);
+  const navigate = useNavigate();
   const [rejectTarget, setRejectTarget]   = useState<GoodsTransferSlip | null>(null);
   const [readyTarget, setReadyTarget]     = useState<GoodsTransferSlip | null>(null);
   const [activeTab, setActiveTab]         = useState('pending');
@@ -232,10 +231,6 @@ const GoodsTransfer: React.FC = () => {
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
-  const openDetail = (slip: GoodsTransferSlip) => {
-    setDetailSlip(slip);
-    setDrawerOpen(true);
-  };
 
   // ── Cột chung (Phiếu + Luồng) ────────────────────────────────────────────
 
@@ -290,7 +285,7 @@ const GoodsTransfer: React.FC = () => {
       align: 'center',
       render: (_: unknown, r: GoodsTransferSlip) => (
         <Tooltip title="Xem chi tiết">
-          <Button type="text" icon={<EyeOutlined />} size="small" onClick={() => openDetail(r)} />
+          <Button type="text" icon={<EyeOutlined />} size="small" onClick={() => navigate(`/warehouse/goods-transfer/${r.slipId}`)} />
         </Tooltip>
       ),
     },
@@ -667,11 +662,6 @@ const GoodsTransfer: React.FC = () => {
 
       {/* ── Modals & Drawers ── */}
 
-      <SlipDetailDrawer
-        slip={detailSlip}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
 
       <RejectReasonModal
         open={!!rejectTarget}

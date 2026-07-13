@@ -11,6 +11,7 @@ import {
   HistoryOutlined, ExclamationCircleOutlined, MinusCircleOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { itemService } from '../../../api/services';
@@ -34,326 +35,17 @@ function useDebounce<T>(value: T, delay: number): T {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-// ─── (Dummy data removed — page now uses live API) ───────────────────────────
+// ─── Create/Edit Modal Removed ────────────────────────────────────────────────────────                
 
-// ─── Create/Edit Modal ────────────────────────────────────────────────────────
 
-interface ProductModalProps {
-  open: boolean;
-  editProduct?: Product | null;
-  onClose: () => void;
-  onSubmit: (values: ProductRequest) => void;
-  submitting: boolean;
-}
-
-const ProductDrawer: React.FC<ProductModalProps> = ({
-  open, editProduct, onClose, onSubmit, submitting,
-}) => {
-  const [form] = Form.useForm<ProductRequest>();
-
-  const { data: allItemsData } = useQuery({
-    queryKey: ['items', 'all'],
-    queryFn: () => itemService.getAllItemsUnpaginated(),
-  });
-  const allItems = Array.isArray(allItemsData) ? allItemsData : ((allItemsData as any)?.data || []);
-  const ingredients = allItems.filter((i: any) => i.itemType === 'INGREDIENT');
-  const semiProducts = allItems.filter((i: any) => i.itemType === 'SEMI_PRODUCT');
-
-  React.useEffect(() => {
-    if (open) {
-      if (editProduct) {
-        let recipe = undefined;
-        if (editProduct.activeRecipe) {
-          recipe = {
-            ...editProduct.activeRecipe,
-            lines: editProduct.activeRecipe.lines.map(l => ({
-              ...l,
-              itemId: l.itemId,
-            }))
-          };
-        }
-        form.setFieldsValue({
-          code: editProduct.code,
-          name: editProduct.name,
-          itemType: editProduct.itemType || 'PRODUCT',
-          productType: editProduct.productType || undefined,
-          productCategory: editProduct.productCategory || undefined,
-          unit: editProduct.unit,
-          sellingPrice: editProduct.sellingPrice || undefined,
-          ingredientType: editProduct.ingredientType || undefined,
-          defaultSupplier: editProduct.defaultSupplier || undefined,
-          recipe: recipe as any,
-        });
-      } else {
-        form.resetFields();
-      }
-    }
-  }, [open, editProduct, form]);
-  const handleFinish = (values: any) => {
-    const payload = { ...values };
-    onSubmit(payload);
-  };
-
-  return (
-    <Modal
-      title={editProduct ? 'Chỉnh Sửa Hàng Hoá' : 'Thêm Hàng Hoá Mới'}
-      open={open}
-      onCancel={onClose}
-      onOk={() => form.submit()}
-      okText={editProduct ? 'Gửi Cập Nhật' : 'Gửi Tạo Mới'}
-      cancelText="Huỷ"
-      confirmLoading={submitting}
-      width={800}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical" onFinish={handleFinish}>
-        <Form.Item
-          name="itemType"
-          label="Loại Hàng Hoá"
-          rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
-        >
-          <Select placeholder="Chọn loại" disabled={!!editProduct} onChange={(val) => form.setFieldsValue({ itemType: val })}>
-            <Select.Option value="INGREDIENT">Nguyên Liệu</Select.Option>
-            <Select.Option value="SEMI_PRODUCT">Bán Thành Phẩm</Select.Option>
-            <Select.Option value="PRODUCT">Sản Phẩm</Select.Option>
-          </Select>
-        </Form.Item>
-
-        <Form.Item
-          name="code"
-          label="Mã Sản Phẩm (IN-CODE)"
-          rules={[
-            { required: true, message: 'Vui lòng nhập mã sản phẩm' },
-            { max: 50, message: 'Tối đa 50 ký tự' },
-          ]}
-        >
-          <Input placeholder="VD: BM001" disabled={!!editProduct} />
-        </Form.Item>
-
-        <Form.Item
-          name="name"
-          label="Tên Sản Phẩm"
-          rules={[
-            { required: true, message: 'Vui lòng nhập tên sản phẩm' },
-            { max: 200, message: 'Tối đa 200 ký tự' },
-          ]}
-        >
-          <Input placeholder="VD: Bánh Mì Bơ Tỏi" />
-        </Form.Item>
-
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="productType"
-              label="Loại Sản Phẩm"
-              rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
-            >
-              <Select placeholder="Chọn loại">
-                <Select.Option value="STANDARD">STANDARD (Theo cái)</Select.Option>
-                <Select.Option value="SHEET_CAKE">SHEET_CAKE (Theo kg)</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-          <Col span={12}>
-            <Form.Item
-              name="unit"
-              label="Đơn Vị"
-              rules={[{ required: true, message: 'Vui lòng chọn đơn vị' }]}
-            >
-              <Select placeholder="Chọn đơn vị">
-                <Select.Option value="PCS">PCS (cái)</Select.Option>
-                <Select.Option value="KG">KG</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
-
-        <Form.Item
-          noStyle
-          shouldUpdate={(prevValues, currentValues) => prevValues.itemType !== currentValues.itemType}
-        >
-          {({ getFieldValue }) => {
-            const currentItemType = getFieldValue('itemType');
-            return currentItemType === 'INGREDIENT' ? (
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
-                    <Input placeholder="VD: Bột" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
-                    <Input placeholder="VD: NCC A" />
-                  </Form.Item>
-                </Col>
-              </Row>
-            ) : (
-              <Row gutter={16}>
-                <Col span={12}>
-                  <Form.Item
-                    name="productCategory"
-                    label="Danh Mục"
-                  >
-                    <Input placeholder="VD: Bánh Kem" />
-                  </Form.Item>
-                </Col>
-                <Col span={12}>
-                  <Form.Item
-                    name="sellingPrice"
-                    label="Giá Bán (VNĐ)"
-                  >
-                    <InputNumber<number>
-                      min={0}
-                      style={{ width: '100%' }}
-                      formatter={(value) => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      parser={(value) => value ? Number(value.replace(/\$\s?|(,*)/g, '')) : 0}
-                      placeholder="VD: 50,000"
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            );
-          }}
-        </Form.Item>
-
-        {/* Recipe Form List Section */}
-        <Form.Item
-          noStyle
-          shouldUpdate={(prevValues, currentValues) => prevValues.itemType !== currentValues.itemType}
-        >
-          {({ getFieldValue }) => {
-            const currentItemType = getFieldValue('itemType');
-            if (currentItemType === 'INGREDIENT') return null;
-
-            return (
-              <Card size="small" title="Cấu hình Công Thức (Recipe)" style={{ marginTop: 16 }}>
-                <Form.List name={['recipe', 'lines']}>
-                  {(fields, { add, remove }) => (
-                    <>
-                      {fields.map(({ key, name, ...restField }) => (
-                        <Space key={key} style={{ display: 'flex', marginBottom: 8, alignItems: 'flex-start' }} align="baseline">
-                          <Form.Item
-                            {...restField}
-                            name={[name, 'itemId']}
-                            rules={[{ required: true, message: 'Chọn thành phần' }]}
-                            style={{ margin: 0, width: 250 }}
-                          >
-                            <Select placeholder="Chọn Nguyên liệu / Bán thành phẩm" showSearch optionFilterProp="children" onChange={(val) => {
-                              const selectedItem = allItems.find((i: any) => i.id === val);
-                              if (selectedItem) {
-                                const currentLines = form.getFieldValue(['recipe', 'lines']) || [];
-                                currentLines[name] = { ...currentLines[name], unit: selectedItem.unit };
-                                form.setFieldsValue({ recipe: { lines: currentLines } });
-                              }
-                            }}>
-                              <Select.OptGroup label="Nguyên Liệu">
-                                {ingredients.map((i: any) => (
-                                  <Select.Option key={i.id} value={i.id}>{i.name}</Select.Option>
-                                ))}
-                              </Select.OptGroup>
-                              <Select.OptGroup label="Bán Thành Phẩm">
-                                {semiProducts.map((i: any) => (
-                                  <Select.Option key={i.id} value={i.id}>{i.name}</Select.Option>
-                                ))}
-                              </Select.OptGroup>
-                            </Select>
-                          </Form.Item>
-
-                          <Form.Item
-                            {...restField}
-                            name={[name, 'quantity']}
-                            rules={[{ required: true, message: 'Nhập số lượng' }]}
-                            style={{ margin: 0, width: 120 }}
-                          >
-                            <InputNumber min={0.1} step={0.1} placeholder="Số lượng" style={{ width: '100%' }} />
-                          </Form.Item>
-
-                          <Form.Item
-                            {...restField}
-                            name={[name, 'unit']}
-                            rules={[{ required: true, message: 'Nhập đơn vị' }]}
-                            style={{ margin: 0, width: 120 }}
-                          >
-                            <Input placeholder="Đơn vị" />
-                          </Form.Item>
-
-                          <Button type="text" danger icon={<MinusCircleOutlined />} onClick={() => remove(name)} />
-                        </Space>
-                      ))}
-                      <Form.Item style={{ margin: 0, marginTop: 8 }}>
-                        <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                          Thêm Dòng Công Thức
-                        </Button>
-                      </Form.Item>
-                    </>
-                  )}
-                </Form.List>
-              </Card>
-            );
-          }}
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-};
-
-// ─── History Modal ────────────────────────────────────────────────────────────
-
-interface HistoryModalProps {
-  open: boolean;
-  productId: string | null;
-  onClose: () => void;
-}
-
-const HistoryModal: React.FC<HistoryModalProps> = ({ open, productId, onClose }) => {
-  const { data: history, isLoading } = useQuery({
-    queryKey: ['product-history', productId],
-    queryFn: () => itemService.getHistory(productId!),
-    enabled: open && !!productId,
-  });
-
-  const historyData = Array.isArray(history) ? history : [];
-
-  return (
-    <Modal
-      title="Lịch Sử Thay Đổi"
-      open={open}
-      onCancel={onClose}
-      footer={null}
-      width={580}
-    >
-      {isLoading ? (
-        <Text type="secondary">Đang tải...</Text>
-      ) : historyData.length === 0 ? (
-        <Alert type="info" message="Chưa có lịch sử thay đổi." showIcon />
-      ) : (
-        <Timeline
-          items={historyData.map((h: ProductHistory) => ({
-            color: h.action === 'CREATE' ? 'green' : h.action === 'DELETE' ? 'red' : 'blue',
-            children: (
-              <div>
-                <Text strong>{h.action}</Text>
-                <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>
-                  {dayjs(h.createdAt).format('HH:mm DD/MM/YYYY')} — {h.createdBy}
-                </Text>
-              </div>
-            ),
-          }))}
-        />
-      )}
-    </Modal>
-  );
-};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const ProductList: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
   const [activeItemType, setActiveItemType] = useState<ItemType | ''>('PRODUCT');
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  const [editProduct, setEditProduct] = useState<Product | null>(null);
-  const [historyProductId, setHistoryProductId] = useState<string | null>(null);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
@@ -415,28 +107,7 @@ const ProductList: React.FC = () => {
     refetchRejected();
   };
 
-  // ── Mutations ─────────────────────────────────────────────────────────────────
-
-  const createMutation = useMutation({
-    mutationFn: (data: ProductRequest) => itemService.submitCreate(data),
-    onSuccess: () => {
-      message.success('Tạo thành công.');
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      setDrawerOpen(false);
-    },
-    onError: () => message.error('Tạo thất bại. Vui lòng thử lại.'),
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: ProductRequest }) =>
-      itemService.submitUpdate(id, data),
-    onSuccess: () => {
-      message.success('Cập nhật thành công.');
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      setDrawerOpen(false);
-      setEditProduct(null);
-    },
-  });
+  // ── Mutations Removed to ProductForm ────────────────────────────────────────────────────────
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => itemService.submitDelete(id),
@@ -494,25 +165,9 @@ const ProductList: React.FC = () => {
     rejectMutation.mutate({ id: rejectTargetId, reason: rejectReason });
   };
 
-  const handleDrawerSubmit = (values: ProductRequest) => {
-    if (editProduct) {
-      updateMutation.mutate({ id: editProduct.id, data: values });
-    } else {
-      createMutation.mutate(values);
-    }
-  };
-
-  const handleEdit = (product: Product) => {
-    setEditProduct(product);
-    setDrawerOpen(true);
-  };
-
   const handleDelete = (id: string) => {
     deleteMutation.mutate(id);
   };
-
-  // Removed filteredActive since we rely on server side search
-
 
   // ── Active Tab Columns ─────────────────────────────────────────────────────────
 
@@ -582,14 +237,14 @@ const ProductList: React.FC = () => {
             <Button
               type="text"
               icon={<HistoryOutlined />}
-              onClick={() => setHistoryProductId(record.id)}
+              onClick={() => navigate(`/products/${record.id}/history`)}
             />
           </Tooltip>
           <Tooltip title="Chỉnh sửa">
             <Button
               type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEdit(record)}
+              icon={<EditOutlined style={{ color: '#1890ff' }} />}
+              onClick={() => navigate(`/products/edit/${record.id}`)}
             />
           </Tooltip>
           <Popconfirm
@@ -843,7 +498,7 @@ const ProductList: React.FC = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => { setEditProduct(null); setDrawerOpen(true); }}
+            onClick={() => navigate('/products/create')}
           >
             Thêm Hàng Hoá
           </Button>
@@ -886,13 +541,7 @@ const ProductList: React.FC = () => {
       <Tabs defaultActiveKey="active" items={tabItems} />
 
       {/* Drawer */}
-      <ProductDrawer
-        open={drawerOpen}
-        editProduct={editProduct}
-        onClose={() => { setDrawerOpen(false); setEditProduct(null); }}
-        onSubmit={handleDrawerSubmit}
-        submitting={createMutation.isPending || updateMutation.isPending}
-      />
+
 
       <Modal
         title="Từ Chối Sản Phẩm"
@@ -913,12 +562,7 @@ const ProductList: React.FC = () => {
         />
       </Modal>
 
-      {/* History Modal */}
-      <HistoryModal
-        open={!!historyProductId}
-        productId={historyProductId}
-        onClose={() => setHistoryProductId(null)}
-      />
+
     </div>
   );
 };

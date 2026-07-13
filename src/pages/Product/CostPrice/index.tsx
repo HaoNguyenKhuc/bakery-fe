@@ -10,6 +10,7 @@ import {
   DollarOutlined, ShoppingOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { priceService, itemService } from '../../../api/services';
@@ -473,138 +474,13 @@ const IngredientPriceTab: React.FC<IngredientPriceTabProps> = ({
   );
 };
 
-// ─── Price Submission Drawers ─────────────────────────────────────────────────
-
-interface ProductPriceDrawerProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (data: ProductPriceRequest) => void;
-  submitting: boolean;
-}
-
-const ProductPriceDrawer: React.FC<ProductPriceDrawerProps> = ({ open, onClose, onSubmit, submitting }) => {
-  const [form] = Form.useForm<ProductPriceRequest>();
-
-  const { data: productsData } = useQuery({
-    queryKey: ['products', 'active'],
-    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT' }),
-    retry: 1,
-  });
-  const products = Array.isArray(productsData) ? productsData : [];
-
-  React.useEffect(() => {
-    if (open) form.resetFields();
-  }, [open, form]);
-
-  return (
-    <Modal
-      title="Thêm Phiên Bản Giá Sản Phẩm"
-      open={open}
-      onCancel={onClose}
-      onOk={() => form.submit()}
-      okText="Gửi Chờ Duyệt"
-      cancelText="Huỷ"
-      confirmLoading={submitting}
-      width={480}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical" onFinish={onSubmit}>
-        <Form.Item name="productId" label="Sản Phẩm" rules={[{ required: true }]}>
-          <Select
-            showSearch
-            placeholder="Chọn sản phẩm..."
-            options={products.map((p) => ({ value: p.id, label: `[${p.code}] ${p.name}` }))}
-            filterOption={(input, option) =>
-              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-            }
-          />
-        </Form.Item>
-        <Form.Item name="price" label="Giá Bán (VND)" rules={[{ required: true }]}>
-          <InputNumber
-            min={0} step={1000} style={{ width: '100%' }}
-            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={(v) => Number(v?.replace(/,/g, '') || 0)}
-          />
-        </Form.Item>
-        <Form.Item name="effectiveDate" label="Ngày Hiệu Lực" rules={[{ required: true }]}>
-          <Input type="date" />
-        </Form.Item>
-        <Form.Item name="note" label="Ghi Chú">
-          <Input.TextArea rows={2} placeholder="Lý do điều chỉnh giá..." />
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-};
-
-interface IngredientPriceDrawerProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (data: IngredientPriceRequest) => void;
-  submitting: boolean;
-}
-
-const IngredientPriceDrawer: React.FC<IngredientPriceDrawerProps> = ({ open, onClose, onSubmit, submitting }) => {
-  const [form] = Form.useForm<IngredientPriceRequest>();
-
-  const { data: ingredientsData } = useQuery({
-    queryKey: ['items', 'ingredients'],
-    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'INGREDIENT' }),
-    retry: 1,
-  });
-  const ingredients = Array.isArray(ingredientsData) ? ingredientsData : [];
-
-  React.useEffect(() => {
-    if (open) form.resetFields();
-  }, [open, form]);
-
-  return (
-    <Modal
-      title="Thêm Phiên Bản Giá Nguyên Liệu"
-      open={open}
-      onCancel={onClose}
-      onOk={() => form.submit()}
-      okText="Gửi Chờ Duyệt"
-      cancelText="Huỷ"
-      confirmLoading={submitting}
-      width={480}
-      destroyOnClose
-    >
-      <Form form={form} layout="vertical" onFinish={onSubmit}>
-        <Form.Item name="ingredientId" label="Nguyên Liệu" rules={[{ required: true }]}>
-          <Select
-            showSearch
-            placeholder="Chọn nguyên liệu..."
-            options={ingredients.map((i) => ({ value: i.id, label: `[${i.code}] ${i.name}` }))}
-            filterOption={(input, option) =>
-              (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-            }
-          />
-        </Form.Item>
-        <Form.Item name="pricePerKg" label="Giá / kg (VND)" rules={[{ required: true }]}>
-          <InputNumber
-            min={0} step={500} style={{ width: '100%' }}
-            formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={(v) => Number(v?.replace(/,/g, '') || 0)}
-          />
-        </Form.Item>
-        <Form.Item name="effectiveDate" label="Ngày Hiệu Lực" rules={[{ required: true }]}>
-          <Input type="date" />
-        </Form.Item>
-        <Form.Item name="note" label="Ghi Chú">
-          <Input.TextArea rows={2} placeholder="Lý do điều chỉnh giá..." />
-        </Form.Item>
-      </Form>
-    </Modal>
-  );
-};
+// ─── Price Submission Drawers Removed ─────────────────────────────────────────────────
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const CostPrice: React.FC = () => {
   const queryClient = useQueryClient();
-  const [ppDrawerOpen, setPpDrawerOpen] = useState(false);
-  const [ipDrawerOpen, setIpDrawerOpen] = useState(false);
+  const navigate = useNavigate();
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -639,14 +515,7 @@ const CostPrice: React.FC = () => {
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
-  const submitPPMutation = useMutation({
-    mutationFn: (data: ProductPriceRequest) => priceService.submitProductPrice(data),
-    onSuccess: () => {
-      message.success('Đã gửi yêu cầu giá sản phẩm. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['product-prices'] });
-      setPpDrawerOpen(false);
-    },
-  });
+
 
   const approvePPMutation = useMutation({
     mutationFn: (commandId: string) => priceService.approveProductPrice(commandId),
@@ -664,14 +533,7 @@ const CostPrice: React.FC = () => {
     },
   });
 
-  const submitIPMutation = useMutation({
-    mutationFn: (data: IngredientPriceRequest) => priceService.submitIngredientPrice(data),
-    onSuccess: () => {
-      message.success('Đã gửi yêu cầu giá nguyên liệu. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['ingredient-prices'] });
-      setIpDrawerOpen(false);
-    },
-  });
+
 
   const approveIPMutation = useMutation({
     mutationFn: (commandId: string) => priceService.approveIngredientPrice(commandId),
@@ -705,7 +567,7 @@ const CostPrice: React.FC = () => {
           onReject={(id) => rejectPPMutation.mutate(id)}
           approvePending={approvePPMutation.isPending}
           rejectPending={rejectPPMutation.isPending}
-          onOpenDrawer={() => setPpDrawerOpen(true)}
+          onOpenDrawer={() => navigate('/products/cost-price/product-price')}
         />
       ),
     },
@@ -728,7 +590,7 @@ const CostPrice: React.FC = () => {
           loadingPending={ipPendingLoading}
           onApprove={(id) => approveIPMutation.mutate(id)}
           approvePending={approveIPMutation.isPending}
-          onOpenDrawer={() => setIpDrawerOpen(true)}
+          onOpenDrawer={() => navigate('/products/cost-price/ingredient-price')}
         />
       ),
     },
@@ -748,19 +610,6 @@ const CostPrice: React.FC = () => {
 
       <Tabs defaultActiveKey="product-price" items={mainTabs} />
 
-      {/* Drawers */}
-      <ProductPriceDrawer
-        open={ppDrawerOpen}
-        onClose={() => setPpDrawerOpen(false)}
-        onSubmit={(data) => submitPPMutation.mutate(data)}
-        submitting={submitPPMutation.isPending}
-      />
-      <IngredientPriceDrawer
-        open={ipDrawerOpen}
-        onClose={() => setIpDrawerOpen(false)}
-        onSubmit={(data) => submitIPMutation.mutate(data)}
-        submitting={submitIPMutation.isPending}
-      />
     </div>
   );
 };

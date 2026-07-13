@@ -11,9 +11,8 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import type {
-  InventoryAdjustment, InventoryAdjustmentLine,
-  InventoryAdjustmentRequest, AdjustmentType,
+import { useNavigate } from 'react-router-dom';
+import type { ColumnsType } from 'antd/es/table';
 } from '../../../types';
 import { useAuthStore } from '../../../store';
 
@@ -54,174 +53,10 @@ const dummyAdjustments: InventoryAdjustment[] = [
   },
 ];
 
-// ─── Form tạo phiếu ───────────────────────────────────────────────────────────
-
-interface AdjFormValues {
-  adjustmentType: AdjustmentType;
-  reason: string;
-  note?: string;
-}
-
-interface CreateModalProps {
-  open: boolean;
-  onClose: () => void;
-  onSubmit: (req: InventoryAdjustmentRequest) => void;
-  submitting: boolean;
-  warehouseCode: 'MAIN' | 'KITCHEN' | 'STORE';
-}
-
-const CreateAdjustmentModal: React.FC<CreateModalProps> = ({
-  open, onClose, onSubmit, submitting, warehouseCode,
-}) => {
-  const [form] = Form.useForm<AdjFormValues>();
-  const [lines, setLines] = useState<InventoryAdjustmentLine[]>([
-    { ingredientCode: '', ingredientName: '', unit: 'KG', lostQuantity: 0 },
-  ]);
-
-  React.useEffect(() => {
-    if (open) {
-      form.resetFields();
-      setLines([{ ingredientCode: '', ingredientName: '', unit: 'KG', lostQuantity: 0 }]);
-    }
-  }, [open, form]);
-
-  const addLine = () =>
-    setLines((prev) => [...prev, { ingredientCode: '', ingredientName: '', unit: 'KG', lostQuantity: 0 }]);
-
-  const removeLine = (i: number) =>
-    setLines((prev) => prev.filter((_, idx) => idx !== i));
-
-  const updateLine = (i: number, field: keyof InventoryAdjustmentLine, value: string | number) =>
-    setLines((prev) => prev.map((l, idx) => idx === i ? { ...l, [field]: value } : l));
-
-  const handleOk = () => {
-    form.validateFields().then((values) => {
-      onSubmit({
-        adjustmentType: values.adjustmentType,
-        warehouseCode,
-        reason: values.reason,
-        note: values.note,
-        lines,
-      });
-    });
-  };
-
-  return (
-    <Modal
-      open={open}
-      title={
-        <Space>
-          <WarningOutlined style={{ color: '#ff4d4f' }} />
-          Tạo Phiếu Thất Thoát / Điều Chỉnh Kho
-        </Space>
-      }
-      okText="Gửi Phiếu"
-      cancelText="Hủy"
-      confirmLoading={submitting}
-      onOk={handleOk}
-      onCancel={onClose}
-      destroyOnClose
-      width={680}
-    >
-      <Alert
-        type="warning"
-        showIcon
-        message="Phiếu sẽ ở trạng thái Chờ Duyệt cho đến khi Admin phê duyệt."
-        style={{ marginBottom: 16 }}
-      />
-      <Form form={form} layout="vertical">
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="adjustmentType"
-              label="Loại Điều Chỉnh"
-              rules={[{ required: true, message: 'Chọn loại điều chỉnh!' }]}
-            >
-              <Select placeholder="Chọn loại...">
-                <Select.Option value="LOSS">🔴 Mất hàng</Select.Option>
-                <Select.Option value="DAMAGE">🟠 Hư hỏng</Select.Option>
-                <Select.Option value="EXPIRED">⚫ Hết hạn sử dụng</Select.Option>
-                <Select.Option value="OTHER">🔵 Lý do khác</Select.Option>
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
-        <Form.Item
-          name="reason"
-          label="Lý Do Cụ Thể"
-          rules={[{ required: true, message: 'Mô tả lý do thất thoát!' }, { min: 10 }]}
-        >
-          <Input.TextArea rows={2} placeholder="Mô tả chi tiết nguyên nhân..." maxLength={300} showCount />
-        </Form.Item>
-        <Form.Item name="note" label="Ghi Chú Thêm">
-          <Input.TextArea rows={1} placeholder="(Tùy chọn)" />
-        </Form.Item>
-      </Form>
-
-      <Divider style={{ margin: '8px 0 12px' }}>Danh Sách Nguyên Liệu Thất Thoát</Divider>
-
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
-        {lines.map((line, i) => (
-          <Row key={i} gutter={8} align="middle">
-            <Col span={5}>
-              <Input
-                placeholder="Mã NL"
-                value={line.ingredientCode}
-                onChange={(e) => updateLine(i, 'ingredientCode', e.target.value)}
-                style={{ fontFamily: 'monospace' }}
-              />
-            </Col>
-            <Col span={7}>
-              <Input
-                placeholder="Tên nguyên liệu"
-                value={line.ingredientName}
-                onChange={(e) => updateLine(i, 'ingredientName', e.target.value)}
-              />
-            </Col>
-            <Col span={4}>
-              <Select
-                value={line.unit}
-                onChange={(v) => updateLine(i, 'unit', v)}
-                style={{ width: '100%' }}
-              >
-                <Select.Option value="KG">KG</Select.Option>
-                <Select.Option value="Lít">Lít</Select.Option>
-                <Select.Option value="Cái">Cái</Select.Option>
-                <Select.Option value="Gói">Gói</Select.Option>
-              </Select>
-            </Col>
-            <Col span={5}>
-              <InputNumber
-                min={0.01}
-                value={line.lostQuantity || undefined}
-                onChange={(v) => updateLine(i, 'lostQuantity', v ?? 0)}
-                style={{ width: '100%' }}
-                placeholder="SL mất"
-              />
-            </Col>
-            <Col span={3}>
-              <Tooltip title="Xóa dòng">
-                <Button
-                  danger type="text"
-                  icon={<DeleteOutlined />}
-                  onClick={() => removeLine(i)}
-                  disabled={lines.length === 1}
-                />
-              </Tooltip>
-            </Col>
-          </Row>
-        ))}
-        <Button type="dashed" icon={<PlusOutlined />} onClick={addLine} style={{ width: '100%' }}>
-          Thêm Dòng
-        </Button>
-      </Space>
-    </Modal>
-  );
-};
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const InventoryAdjustmentPage: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   const user        = useAuthStore((s) => s.user);
@@ -243,8 +78,6 @@ const InventoryAdjustmentPage: React.FC = () => {
   const canCreateAdjustment = canOnScreen('INVENTORY_ADJUSTMENT', 'create') &&
     (isWarehouseRole('KHO_TONG') || isWarehouseRole('KHO_BEP') || isAdmin());
 
-  const [modalOpen, setModalOpen] = useState(false);
-
   const { data, isLoading } = useQuery({
     queryKey: ['inventory-adjustment', user?.branch_code],
     queryFn: async (): Promise<InventoryAdjustment[]> => { throw new Error('API not ready'); },
@@ -252,16 +85,6 @@ const InventoryAdjustmentPage: React.FC = () => {
   });
 
   const list: InventoryAdjustment[] = Array.isArray(data) ? data : dummyAdjustments;
-
-  const createMutation = useMutation({
-    mutationFn: async (_req: InventoryAdjustmentRequest) => { throw new Error('API not ready'); },
-    onSuccess: () => {
-      message.success('Đã gửi phiếu thất thoát. Chờ Admin phê duyệt.');
-      queryClient.invalidateQueries({ queryKey: ['inventory-adjustment'] });
-      setModalOpen(false);
-    },
-    onError: () => message.warning('API chưa sẵn sàng — phiếu đã được ghi nhận (demo).'),
-  });
 
   const approveMutation = useMutation({
     mutationFn: async (_id: string) => { throw new Error('API not ready'); },
@@ -387,7 +210,7 @@ const InventoryAdjustmentPage: React.FC = () => {
                 type="primary"
                 danger
                 icon={<PlusOutlined />}
-                onClick={() => setModalOpen(true)}
+                onClick={() => navigate('/warehouse/inventory-adjustment/create')}
               >
                 Tạo Phiếu Mất Hàng
               </Button>
@@ -425,14 +248,6 @@ const InventoryAdjustmentPage: React.FC = () => {
         loading={isLoading}
         pagination={{ pageSize: 10, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} phiếu` }}
         locale={{ emptyText: '✅ Chưa có phiếu điều chỉnh nào.' }}
-      />
-
-      <CreateAdjustmentModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={(req) => createMutation.mutate(req)}
-        submitting={createMutation.isPending}
-        warehouseCode={warehouseCode}
       />
     </div>
   );

@@ -10,6 +10,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { recipeService, itemService } from '../../../api/services';
@@ -82,226 +83,7 @@ const dummyRecipes: Recipe[] = [
   },
 ];
 
-// ─── RecipeLine Editor ────────────────────────────────────────────────────────
-
-interface RecipeLineRow {
-  rowKey: string;
-  itemId?: string;
-  quantity: number;
-  unit: string;
-}
-
-interface RecipeLineEditorProps {
-  lines: RecipeLineRow[];
-  onChange: (lines: RecipeLineRow[]) => void;
-  allItems: any[]; // Or Item[]
-}
-
-const RecipeLineEditor: React.FC<RecipeLineEditorProps> = ({ lines, onChange, allItems }) => {
-  const addLine = () => {
-    onChange([
-      ...lines,
-      {
-        rowKey: crypto.randomUUID(),
-        quantity: 0,
-        unit: 'g',
-      },
-    ]);
-  };
-
-  const removeLine = (rowKey: string) => {
-    onChange(lines.filter((l) => l.rowKey !== rowKey));
-  };
-
-  const updateLine = (rowKey: string, updates: Partial<RecipeLineRow>) => {
-    onChange(lines.map((l) => (l.rowKey === rowKey ? { ...l, ...updates } : l)));
-  };
-
-  const columns: ColumnsType<RecipeLineRow> = [
-    {
-      title: 'Nguyên Liệu / Bán Thành Phẩm',
-      dataIndex: 'itemId',
-      render: (v: string, record) => (
-        <Select
-          size="small"
-          showSearch
-          placeholder="Tìm và chọn nguyên liệu..."
-          value={v}
-          onChange={(val) => {
-            const selectedItem = allItems.find(i => i.id === val);
-            updateLine(record.rowKey, { 
-              itemId: val,
-              unit: selectedItem?.unit || record.unit
-            });
-          }}
-          filterOption={(input, option) =>
-            (option?.label as string)?.toLowerCase().includes(input.toLowerCase())
-          }
-          options={allItems.map(i => ({
-            value: i.id,
-            label: `[${i.code}] ${i.name}`
-          }))}
-          style={{ width: '100%' }}
-        />
-      ),
-    },
-    {
-      title: 'Số Lượng',
-      dataIndex: 'quantity',
-      width: 140,
-      render: (v: number, record) => (
-        <InputNumber
-          size="small"
-          min={0}
-          value={v}
-          style={{ width: '100%' }}
-          onChange={(val) => updateLine(record.rowKey, { quantity: val ?? 0 })}
-        />
-      ),
-    },
-    {
-      title: 'Đơn Vị',
-      dataIndex: 'unit',
-      width: 120,
-      render: (v: string, record) => (
-        <Input
-          size="small"
-          placeholder="Đơn vị..."
-          value={v}
-          onChange={(e) => updateLine(record.rowKey, { unit: e.target.value })}
-        />
-      ),
-    },
-    {
-      title: '',
-      width: 50,
-      render: (_: unknown, record) => (
-        <Popconfirm
-          title="Xoá dòng này?"
-          onConfirm={() => removeLine(record.rowKey)}
-          okText="Xoá"
-          cancelText="Huỷ"
-        >
-          <Button type="text" danger size="small" icon={<DeleteOutlined />} />
-        </Popconfirm>
-      ),
-    },
-  ];
-
-  return (
-    <div>
-      <Table<RecipeLineRow>
-        columns={columns}
-        dataSource={lines}
-        rowKey="rowKey"
-        pagination={false}
-        size="small"
-        bordered
-        locale={{ emptyText: 'Chưa có nguyên liệu nào. Bấm "Thêm Dòng" để bắt đầu.' }}
-      />
-      <Button
-        type="dashed"
-        icon={<PlusOutlined />}
-        onClick={addLine}
-        style={{ marginTop: 8, width: '100%' }}
-      >
-        Thêm Dòng Nguyên Liệu
-      </Button>
-    </div>
-  );
-};
-
-// ─── Create Recipe Modal ─────────────────────────────────────────────────────
-
-interface CreateRecipeModalProps {
-  open: boolean;
-  item: Product;
-  allItems: any[];
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-const CreateRecipeDrawer: React.FC<CreateRecipeModalProps> = ({
-  open, item, allItems, onClose, onSuccess,
-}) => {
-  const [form] = Form.useForm();
-  const [lines, setLines] = useState<RecipeLineRow[]>([]);
-  const queryClient = useQueryClient();
-
-  React.useEffect(() => {
-    if (open) {
-      form.resetFields();
-      setLines([]);
-    }
-  }, [open, form]);
-
-  const createMutation = useMutation({
-    mutationFn: (data: RecipeRequest) => recipeService.create(data),
-    onSuccess: () => {
-      message.success('Tạo phiên bản công thức mới thành công! Phiên bản cũ đã bị deactivate.');
-      queryClient.invalidateQueries({ queryKey: ['recipes', item.id] });
-      onSuccess();
-      onClose();
-    },
-    onError: () => message.error('Tạo công thức thất bại.'),
-  });
-
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
-
-    if (lines.length === 0) {
-      message.error('Công thức phải có ít nhất 1 dòng nguyên liệu.');
-      return;
-    }
-
-    const recipeLines: RecipeLineRequest[] = lines.map((l) => ({
-      itemId: l.itemId!,
-      quantity: l.quantity,
-      unit: l.unit,
-    }));
-
-    createMutation.mutate({
-      productId: item.itemType === 'PRODUCT' ? item.id : undefined,
-      semiProductId: item.itemType === 'SEMI_PRODUCT' ? item.id : undefined,
-      note: values.note,
-      lines: recipeLines,
-    });
-  };
-
-  return (
-    <Modal
-      title="Tạo Phiên Bản Công Thức Mới"
-      open={open}
-      onCancel={onClose}
-      onOk={handleSubmit}
-      okText={<Space><SaveOutlined />Lưu Công Thức</Space>}
-      cancelText="Huỷ"
-      confirmLoading={createMutation.isPending}
-      width={900}
-      styles={{ body: { maxHeight: '72vh', overflowY: 'auto', paddingRight: 4 } }}
-      destroyOnClose
-    >
-      <Alert
-        type="warning"
-        showIcon
-        message="Tạo phiên bản mới sẽ tự động deactivate phiên bản đang hoạt động của cùng sản phẩm."
-        style={{ marginBottom: 16 }}
-      />
-      <Form form={form} layout="vertical">
-        <Row gutter={16}>
-          <Col xs={24}>
-            <Form.Item name="note" label="Ghi Chú">
-              <Input placeholder="Lý do tạo phiên bản mới..." />
-            </Form.Item>
-          </Col>
-        </Row>
-      </Form>
-
-      <Divider>Danh Sách Nguyên Liệu</Divider>
-      <RecipeLineEditor lines={lines} onChange={setLines} allItems={allItems} />
-    </Modal>
-  );
-};
+// ─── Create Recipe Modal Removed ─────────────────────────────────────────────────────
 
 // ─── Recipe Version List ──────────────────────────────────────────────────────
 
@@ -489,8 +271,8 @@ const RecipeVersionList: React.FC<RecipeVersionListProps> = ({ recipes, unit, pr
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const RecipePage: React.FC = () => {
+  const navigate = useNavigate();
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
 
   const { data: productsData } = useQuery({
     queryKey: ['products', 'recipes_items'],
@@ -534,7 +316,7 @@ const RecipePage: React.FC = () => {
             type="primary"
             icon={<PlusOutlined />}
             disabled={!selectedProductId}
-            onClick={() => setCreateDrawerOpen(true)}
+            onClick={() => navigate(`/products/recipes/form?productId=${selectedProductId}`)}
           >
             Tạo Phiên Bản Mới
           </Button>
@@ -609,16 +391,6 @@ const RecipePage: React.FC = () => {
         />
       )}
 
-      {/* Create Drawer */}
-      {selectedProduct && (
-        <CreateRecipeDrawer
-          open={createDrawerOpen}
-          item={selectedProduct}
-          allItems={products}
-          onClose={() => setCreateDrawerOpen(false)}
-          onSuccess={() => setCreateDrawerOpen(false)}
-        />
-      )}
     </div>
   );
 };
