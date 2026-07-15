@@ -12,8 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
-import type { ColumnsType } from 'antd/es/table';
-} from '../../../types';
+import type { AdjustmentType, InventoryAdjustment } from '../../../types';
 import { useAuthStore } from '../../../store';
 
 const { Title, Text } = Typography;

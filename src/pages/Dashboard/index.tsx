@@ -141,8 +141,7 @@ const pieConfig = {
   innerRadius: 0.55,
   color: ['#D2691E', '#F4A460', '#1890ff', '#52c41a', '#bfbfbf'],
   label: {
-    type: 'outer' as const,
-    content: '{name} {percentage}',
+    text: 'type',
     style: { fontSize: 12 },
   },
   legend: { position: 'bottom' as const },

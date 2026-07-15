@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Breadcrumb, Avatar, Dropdown, Badge, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
@@ -22,6 +22,7 @@ import {
   TeamOutlined,
   UserSwitchOutlined,
   OrderedListOutlined,
+  ToolOutlined,
 } from '@ant-design/icons';
 import { useAuthStore, useAppStore, selectSidebarCollapsed, selectUnreadCount } from '../../store';
 import { useWarehouseStore } from '../../store';
@@ -42,6 +43,7 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/products/edit': 'Chỉnh Sửa Hàng Hoá',
   '/products/recipes': 'Công Thức',
   '/products/cost-price': 'Giá Cost',
+  '/production/plans': 'Kế Hoạch Sản Xuất',
   '/warehouse': 'Kho',
   '/warehouse/main': 'Kho Tổng',
   '/warehouse/kitchen': 'Kho Bếp',
@@ -80,10 +82,10 @@ const ALL_WAREHOUSE_ITEMS: MenuItem[] = [
 
 /** Map: mockRole → danh sách key được phép */
 const WAREHOUSE_ROLE_ACCESS: Record<MockRole, string[]> = {
-  SUPER_ADMIN:  ['/warehouse/main', '/warehouse/kitchen', '/warehouse/store'],
-  ADMIN_KHO:    ['/warehouse/main'],
-  ADMIN_BEP:    ['/warehouse/kitchen'],
-  NV_CUA_HANG:  ['/warehouse/store'],
+  SUPER_ADMIN: ['/warehouse/main', '/warehouse/kitchen', '/warehouse/store'],
+  ADMIN_KHO: ['/warehouse/main'],
+  ADMIN_BEP: ['/warehouse/kitchen'],
+  NV_CUA_HANG: ['/warehouse/store'],
 };
 
 /** Lọc danh sách trang kho theo mockRole */
@@ -112,6 +114,11 @@ const STATIC_MENU_ITEMS_BEFORE: MenuItem[] = [
         label: 'Danh Sách Sản Phẩm',
       },
       {
+        key: '/products/groups',
+        icon: <UnorderedListOutlined />,
+        label: 'Item Groups',
+      },
+      {
         key: '/products/recipes',
         icon: <ExperimentOutlined />,
         label: 'Công Thức',
@@ -122,6 +129,11 @@ const STATIC_MENU_ITEMS_BEFORE: MenuItem[] = [
         label: 'Giá Cost',
       },
     ],
+  },
+  {
+    key: '/production/plans',
+    icon: <ToolOutlined />,
+    label: 'Kế Hoạch Sản Xuất',
   },
 ];
 
@@ -156,10 +168,10 @@ const ROLE_LABELS: Record<string, string> = {
   ADMIN: 'Quản Trị Viên',
   STAFF: 'Nhân Viên',
   // Mock roles
-  SUPER_ADMIN:  '👑 Super Admin',
-  ADMIN_KHO:    '🏠 Admin Kho',
-  ADMIN_BEP:    '🔥 Admin Bếp',
-  NV_CUA_HANG:  '🛍️ NV Cửa Hàng',
+  SUPER_ADMIN: '👑 Super Admin',
+  ADMIN_KHO: '🏠 Admin Kho',
+  ADMIN_BEP: '🔥 Admin Bếp',
+  NV_CUA_HANG: '🛍️ NV Cửa Hàng',
 };
 
 // --- Main Layout Component ---
@@ -188,13 +200,24 @@ const MainLayout: React.FC = () => {
     return [pathname];
   }, [location]);
 
-  const defaultOpenKeys = useMemo(() => {
-    const { pathname } = location;
+  const getOpenKeyFromPath = (pathname: string): string[] => {
     if (pathname.startsWith('/products')) return ['products'];
     if (pathname.startsWith('/warehouse')) return ['warehouse'];
     if (pathname.startsWith('/settings')) return ['settings'];
     return [];
-  }, [location]);
+  };
+
+  const [openKeys, setOpenKeys] = useState<string[]>(() =>
+    getOpenKeyFromPath(location.pathname)
+  );
+
+  useEffect(() => {
+    const keys = getOpenKeyFromPath(location.pathname);
+    if (keys.length > 0) {
+      setOpenKeys((prev) => Array.from(new Set([...prev, ...keys])));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // Build breadcrumb items from path
   const breadcrumbItems = useMemo(() => {
@@ -334,7 +357,8 @@ const MainLayout: React.FC = () => {
           theme="dark"
           mode="inline"
           selectedKeys={selectedKeys}
-          defaultOpenKeys={defaultOpenKeys}
+          openKeys={openKeys}
+          onOpenChange={setOpenKeys}
           items={dynamicMenuItems}
           onClick={onMenuClick}
         />

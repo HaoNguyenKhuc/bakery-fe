@@ -11,3 +11,6 @@ export { default as warehouseService } from './warehouseService';
 export { default as masterService } from './masterService';
 export type { Warehouse } from './warehouseService';
 export { default as itemService } from './itemService'; 
+export { default as itemGroupService } from './itemGroupService';
+export { default as productionGroupService } from './productionGroupService';
+export { default as thresholdRuleService } from './thresholdRuleService';

@@ -126,6 +126,23 @@ export interface LoginResponse {
 }
 
 // ─────────────────────────────────────────────
+// ITEM GROUP
+// ─────────────────────────────────────────────
+
+export interface ItemGroup {
+  id: string;
+  code: string;
+  name: string;
+  sortOrder: number;
+}
+
+export interface ItemGroupRequest {
+  code: string;
+  name: string;
+  sortOrder: number;
+}
+
+// ─────────────────────────────────────────────
 // PRODUCT
 // ─────────────────────────────────────────────
 
@@ -166,6 +183,9 @@ export interface ItemRequest {
   name: string;
   itemType: ItemType;
   unit: string;
+  itemGroupId?: string | null;
+  splittable?: boolean;
+  unitSize?: number | null;
 
   // Ingredient fields
   ingredientType?: string;
@@ -240,9 +260,12 @@ export interface RecipeLineRequest {
 
 /** PUT /master/recipes/{id} */
 export interface RecipeUpdateRequest {
+  productId?: string;
+  semiProductId?: string;
   note?: string;
   effectiveDate?: string;
   isActive?: boolean;
+  lines?: RecipeLineRequest[];
 }
 
 // ─────────────────────────────────────────────
@@ -1019,20 +1042,29 @@ export type PlanStatus = 'DRAFT' | 'APPROVED' | 'CANCELLED';
 /** Một dòng sản phẩm trong kế hoạch sản xuất */
 export interface ProductionPlanLine {
   id: string;
-  productId: string;
-  productCode: string;
-  productName: string;
+  itemId?: string;
+  itemCode?: string;
+  itemName?: string;
+  item?: any;
+  productId?: string;
+  productCode?: string;
+  productName?: string;
   unit: string;
-  plannedQty: number;          // Số lượng kế hoạch
+  suggestedQty?: number;
+  plannedQty?: number;          // Số lượng kế hoạch
   adjustedQty?: number;        // Sau khi điều chỉnh thủ công
   note?: string;
+  group?: any;
 }
 
 /** Kế hoạch sản xuất ngày */
 export interface ProductionPlan {
   id: string;
-  targetDate: string;          // yyyy-MM-dd
-  status: PlanStatus;
+  planDate?: string;
+  targetDate?: string;          // yyyy-MM-dd
+  dayType?: string;
+  approvalStatus?: string;
+  status?: string; // PlanStatus
   lines: ProductionPlanLine[];
   note?: string;
   createdBy: string;
@@ -1198,5 +1230,68 @@ export interface ReconciliationSummary {
 export interface ReconciliationParams {
   date: string;                // yyyy-MM-dd (bắt buộc)
   branchId?: string;
+}
+
+// ─────────────────────────────────────────────
+// PRODUCTION GROUPS
+// GET|POST  /api/v1/production-groups
+// PUT|DELETE /api/v1/production-groups/:id
+// ─────────────────────────────────────────────
+
+export type ProductionGroupType = 'FREE_GROUP' | 'BATCH_FORMULA';
+
+export interface ProductionGroupItem {
+  itemId?: string;
+  item?: { key: string; name: string };
+  gramsPerUnit?: number | null;
+  sortOrder: number;
+}
+
+export interface ProductionGroup {
+  id: string;
+  code: string;
+  name: string;
+  groupType: ProductionGroupType;
+  itemGroup?: { key: string; name: string } | null;
+  targetWeekday?: number | null;
+  targetWeekend?: number | null;
+  thresholdPercent?: number | null;
+  batchWeightGrams?: number | null;
+  note?: string | null;
+  items: ProductionGroupItem[];
+}
+
+export interface ProductionGroupRequest {
+  code: string;
+  name: string;
+  groupType: ProductionGroupType;
+  itemGroupId?: string | null;
+  targetWeekday?: number | null;
+  targetWeekend?: number | null;
+  thresholdPercent?: number | null;
+  batchWeightGrams?: number | null;
+  note?: string | null;
+  items: { itemId: string; gramsPerUnit?: number | null; sortOrder: number }[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THRESHOLD RULES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ThresholdRuleDayType = 'WEEKDAY' | 'WEEKEND';
+export type ThresholdConditionType = 'COUNT' | 'PERCENT';
+export type ThresholdActionType = 'PRODUCE_MORE' | 'FILL_TO_TARGET';
+
+export interface ThresholdRule {
+  dayType: ThresholdRuleDayType;
+  sortOrder: number;
+  conditionType: ThresholdConditionType;
+  conditionValue: number | null;
+  actionType: ThresholdActionType;
+  actionValue: number | null;
+}
+
+export interface ThresholdRuleUpdateRequest {
+  rules: ThresholdRule[];
 }
 

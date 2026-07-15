@@ -35,69 +35,31 @@ import type {
 const productionService = {
   // ── KẾ HOẠCH SẢN XUẤT ────────────────────────────
 
-  /**
-   * POST /admin/production/plan/generate?targetDate=yyyy-MM-dd
-   * Sinh kế hoạch sản xuất cho ngày mai (API #3).
-   *
-   * Backend tự tính: template_qty − tồn_kho_hiện_tại = qty cần sản xuất.
-   * Kết quả là ProductionPlan với status = DRAFT, chờ review + approve.
-   *
-   * @param targetDate Ngày sản xuất (yyyy-MM-dd), thường là ngày mai
-   *
-   * @example
-   * const plan = await productionService.generatePlan('2026-07-09');
-   */
-  generatePlan: (targetDate: string) =>
-    api.post<ProductionPlan>(
-      `/admin/production/plan/generate?targetDate=${targetDate}`,
-    ),
+  getPlanByDate: (date: string) =>
+    api.get<ProductionPlan>(`/api/v1/production/plans/by-date?date=${date}`),
 
-  /**
-   * GET /admin/production/plans/{id}
-   * Xem chi tiết kế hoạch sản xuất (API #4).
-   * Dùng để review và kiểm tra trước khi duyệt.
-   *
-   * @param id UUID của kế hoạch
-   */
+  generatePlan: (date: string) =>
+    api.post<ProductionPlan>(`/api/v1/production/plans/generate?date=${date}`),
+
   getPlan: (id: string) =>
-    api.get<ProductionPlan>(`/admin/production/plans/${id}`),
+    api.get<ProductionPlan>(`/api/v1/production/plans/${id}`),
 
-  /**
-   * PUT /admin/production/plans/{id}/lines/{lineId}
-   * Điều chỉnh số lượng một dòng trong kế hoạch (API #5).
-   *
-   * Dùng khi số lượng tự động tính chưa hợp lý,
-   * bếp trưởng có thể override từng dòng trước khi duyệt.
-   *
-   * @param id     UUID kế hoạch
-   * @param lineId UUID dòng cần điều chỉnh
-   * @param data   Số lượng mới + ghi chú
-   *
-   * @example
-   * await productionService.adjustPlanLine('plan-uuid', 'line-uuid', {
-   *   plannedQty: 120,
-   *   note: 'Thêm vì đơn hàng phát sinh',
-   * });
-   */
-  adjustPlanLine: (id: string, lineId: string, data: PlanLineAdjustRequest) =>
-    api.put<ProductionPlan>(
-      `/admin/production/plans/${id}/lines/${lineId}`,
-      data,
+  adjustPlanLine: (id: string, lines: { lineId: string; adjustedQty: number }[]) =>
+    api.put<ProductionPlan>(`/api/v1/production/plans/${id}/adjust`, { lines }),
+
+  approvePlan: (id: string) =>
+    api.post<ProductionPlan>(`/api/v1/production/plans/${id}/approve`),
+
+  rejectPlan: (id: string, reason: string) =>
+    api.post<ProductionPlan>(
+      `/api/v1/production/plans/${id}/reject?reason=${encodeURIComponent(reason)}`,
     ),
 
-  /**
-   * POST /admin/production/plans/{id}/approve
-   * Duyệt kế hoạch → sinh ProductionRequests (API #6).
-   *
-   * Sau khi approve:
-   *   - Plan status → APPROVED
-   *   - Hệ thống tự sinh ProductionRequest cho từng dòng
-   *   - Bếp sẽ thấy lệnh trong danh sách /requests
-   *
-   * @param id UUID kế hoạch
-   */
-  approvePlan: (id: string) =>
-    api.post<ProductionPlan>(`/admin/production/plans/${id}/approve`),
+  regeneratePlan: (id: string) =>
+    api.post<ProductionPlan>(`/api/v1/production/plans/${id}/regenerate`),
+
+  generateRequestsFromPlan: (id: string) =>
+    api.post<{ requestsCreated: number }>(`/api/v1/production/plans/${id}/generate-requests`),
 
   // ── LỆNH SẢN XUẤT (TRONG NGÀY) ───────────────────
 
