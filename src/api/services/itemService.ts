@@ -13,6 +13,10 @@ const itemService = {
   getAllItems: (params?: { search?: string; approvalStatus?: string; itemType?: string; page?: number; size?: number }) =>
     api.get<any>('/api/v1/items', params),
 
+  /** GET /items — Load all items of a type (large page) for client-side group filtering */
+  getAllItemsByType: (itemType: string) =>
+    api.get<any>('/api/v1/items', { itemType, page: 0, size: 2000 }),
+
   /** GET /items/all — All items without pagination (useful for dropdowns) */
   getAllItemsUnpaginated: (params?: { itemType?: string }) =>
     api.get<Item[]>('/api/v1/items/all', params),

@@ -21,6 +21,12 @@ export interface BaseEntity {
 
 export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 
+/** Generic key-value reference returned by backend for FK fields */
+export interface ReferenceValue {
+  key: string;   // e.g. code
+  value: string; // e.g. name
+}
+
 // ─────────────────────────────────────────────
 // BRANCH (Chi nhánh / Kho)
 // GET /admin/branches/active?branchType=...
@@ -173,7 +179,8 @@ export interface Item extends BaseEntity {
   productCategory?: string | null;
   sellingPrice?: number | null;
 
-  // Related to SemiProduct / Product
+  // Item Group (only for PRODUCT)
+  itemGroup?: ReferenceValue | null;
   activeRecipe?: Recipe | null;
   recipe?: RecipeRequest | null;
 }
@@ -1293,5 +1300,114 @@ export interface ThresholdRule {
 
 export interface ThresholdRuleUpdateRequest {
   rules: ThresholdRule[];
+}
+
+// ─────────────────────────────────────────────
+// PRODUCTION REQUEST (production-request-controller)
+// GET    /api/v1/production-requests
+// POST   /api/v1/production-requests
+// GET    /api/v1/production-requests/{id}
+// PUT    /api/v1/production-requests/{id}
+// DELETE /api/v1/production-requests/{id}
+// POST   /api/v1/production-requests/{id}/approve
+// POST   /api/v1/production-requests/{id}/reject
+// GET    /api/v1/production-requests/all
+// POST   /api/v1/production-requests/{id}/lines/{lineId}/complete
+// POST   /api/v1/production-requests/{id}/lines/complete-batch
+// ─────────────────────────────────────────────
+
+export type ProductionType = 'DAILY' | 'ORDER';
+
+/** ReferenceValue — dạng { key, name } trả về từ nhiều endpoint */
+export interface ReferenceValue {
+  key: string;
+  name: string;
+}
+
+/** Delivery Record cho 1 dòng sản xuất */
+export interface DeliveryRecordDetail {
+  id: string;
+  qtyProduced: number;
+  qtyReceived: number;
+  discrepancy: number;
+  deliveryStatus: string;
+  confirmedAt?: string;
+  confirmedBy?: string;
+  note?: string;
+}
+
+/** Dòng sản xuất — từ ProductionRequestLineResponse */
+export interface ProductionRequestLineDetail {
+  id: string;
+  status: string;
+  approvalStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  rejectedReason?: string;
+  product: ReferenceValue;
+  recipe?: ReferenceValue;
+  plannedQty: number;
+  lineStatus: string;
+  sortOrder: number;
+  note?: string;
+  deliveryRecord?: DeliveryRecordDetail;
+}
+
+/** Lệnh sản xuất đầy đủ — từ ProductionRequestResponse */
+export interface ProductionRequestDetail {
+  id: string;
+  status: string;
+  approvalStatus: string;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  rejectedReason?: string;
+  code: string;
+  productionType: ProductionType;
+  productionDate: string;          // yyyy-MM-dd
+  note?: string;
+  lines: ProductionRequestLineDetail[];
+}
+
+/** Wrapper phân trang từ /api/v1/production-requests */
+export interface ProductionRequestPageResponse {
+  content: ProductionRequestDetail[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+// ── Request Bodies ────────────────────────────
+
+/** Một dòng trong form tạo/sửa lệnh sản xuất */
+export interface ProductionRequestLineInput {
+  productId: string;
+  recipeId?: string;
+  plannedQty: number;
+  sortOrder?: number;
+  note?: string;
+}
+
+/** Body cho POST/PUT /api/v1/production-requests */
+export interface ProductionRequestInput {
+  productionType: ProductionType;
+  productionDate: string;          // yyyy-MM-dd
+  note?: string;
+  lines: ProductionRequestLineInput[];
+}
+
+/** Body cho POST .../lines/complete-batch */
+export interface CompleteLineRequest {
+  lineId: string;
+  qtyProduced: number;
+  adjustmentType?: 'INGREDIENT_VARIANCE' | 'PRODUCTION_WASTAGE';
+  reason?: string;
+  note?: string;
 }
 

@@ -23,6 +23,7 @@ import {
   UserSwitchOutlined,
   OrderedListOutlined,
   ToolOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons';
 import { useAuthStore, useAppStore, selectSidebarCollapsed, selectUnreadCount } from '../../store';
 import { useWarehouseStore } from '../../store';
@@ -44,6 +45,9 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/products/recipes': 'Công Thức',
   '/products/cost-price': 'Giá Cost',
   '/production/plans': 'Kế Hoạch Sản Xuất',
+  '/production/requests': 'Lệnh Sản Xuất',
+  '/production/requests/create': 'Tạo Lệnh Sản Xuất',
+  '/production/requests/edit': 'Chỉnh Sửa Lệnh Sản Xuất',
   '/warehouse': 'Kho',
   '/warehouse/main': 'Kho Tổng',
   '/warehouse/kitchen': 'Kho Bếp',
@@ -131,9 +135,21 @@ const STATIC_MENU_ITEMS_BEFORE: MenuItem[] = [
     ],
   },
   {
-    key: '/production/plans',
+    key: 'production',
     icon: <ToolOutlined />,
-    label: 'Kế Hoạch Sản Xuất',
+    label: 'Sản Xuất',
+    children: [
+      {
+        key: '/production/plans',
+        icon: <ScheduleOutlined />,
+        label: 'Kế Hoạch Sản Xuất',
+      },
+      {
+        key: '/production/requests',
+        icon: <OrderedListOutlined />,
+        label: 'Lệnh Sản Xuất',
+      },
+    ],
   },
 ];
 

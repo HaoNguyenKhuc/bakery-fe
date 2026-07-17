@@ -17,6 +17,8 @@ const RecipeForm = React.lazy(() => import('./pages/Product/Recipe/RecipeForm'))
 const RecipeDetail = React.lazy(() => import('./pages/Product/Recipe/RecipeDetail'));
 const CostPrice = React.lazy(() => import('./pages/Product/CostPrice'));
 const ProductionPlanning = React.lazy(() => import('./pages/ProductionGroups'));
+const ProductionRequestList = React.lazy(() => import('./pages/ProductionRequests'));
+const ProductionRequestForm = React.lazy(() => import('./pages/ProductionRequests/ProductionRequestForm'));
 const ProductPriceForm = React.lazy(() => import('./pages/Product/CostPrice/ProductPriceForm'));
 const IngredientPriceForm = React.lazy(() => import('./pages/Product/CostPrice/IngredientPriceForm'));
 const MainWarehouse = React.lazy(() => import('./pages/Warehouse/Main'));
@@ -94,6 +96,9 @@ const App: React.FC = () => {
         {/* Production module */}
         <Route path="production" element={<Lazy><ProductionPlanning /></Lazy>} />
         <Route path="production/plans" element={<Lazy><ProductionPlanning /></Lazy>} />
+        <Route path="production/requests" element={<Lazy><ProductionRequestList /></Lazy>} />
+        <Route path="production/requests/create" element={<Lazy><ProductionRequestForm /></Lazy>} />
+        <Route path="production/requests/edit/:id" element={<Lazy><ProductionRequestForm /></Lazy>} />
         <Route path="products/cost-price/product-price" element={<Lazy><ProductPriceForm /></Lazy>} />
         <Route path="products/cost-price/ingredient-price" element={<Lazy><IngredientPriceForm /></Lazy>} />
 

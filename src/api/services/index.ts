@@ -5,6 +5,7 @@ export { default as kitchenService } from './kitchenService';
 export { default as batchService } from './batchService';
 export { default as transactionService } from './transactionService';
 export { default as productionService } from './productionService';
+export { default as productionRequestService } from './productionRequestService';
 export { default as inventoryService } from './inventoryService';
 export { default as branchService } from './branchService';
 export { default as warehouseService } from './warehouseService';
