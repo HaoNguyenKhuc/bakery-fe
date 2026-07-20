@@ -5,7 +5,7 @@ import {
   Badge, Row, Col, message, Empty,
 } from 'antd';
 import {
-  PlusOutlined, SearchOutlined, ShopOutlined,
+  PlusOutlined, SearchOutlined, ShopOutlined, EyeOutlined,
   CheckOutlined, CloseOutlined, ShoppingCartOutlined,
   ImportOutlined, ExportOutlined, FormOutlined, InboxOutlined,
 } from '@ant-design/icons';

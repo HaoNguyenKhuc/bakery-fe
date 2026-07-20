@@ -1,20 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Table, Button, Input, Tag, Space, Typography, Tabs,
   Modal, Form, InputNumber, Divider, Alert,
-  Tooltip, Badge, Row, Col, message, Empty,
+  Tooltip, Badge, Row, Col, message, Empty, DatePicker,
 } from 'antd';
 import {
-  PlusOutlined, SearchOutlined, ImportOutlined, ExportOutlined,
+  PlusOutlined, SearchOutlined, ImportOutlined, ExportOutlined, EyeOutlined,
   CheckOutlined, CloseOutlined,
   DeleteOutlined, FireOutlined, RollbackOutlined, FormOutlined, InboxOutlined,
+  FileTextOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { transactionService, inventoryService } from '../../../api/services';
+import dailyReportService from '../../../api/services/dailyReportService';
 import { useWarehouseStore } from '../../../store';
 import RejectModal from '../components/RejectModal';
+import type { DailyReportLine } from '../../../types/dailyReport';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -56,13 +60,213 @@ const TYPE_COLOR: Record<TransactionType, string> = {
 
 // ─── Return-to-Main Modal ─────────────────────────────────────────────────────
 
+// ─── End-of-Day Report Tab ────────────────────────────────────────────────────
 
+interface EndOfDayReportTabProps {
+  reportDate: Dayjs;
+  setReportDate: (d: Dayjs) => void;
+  remainingMap: Record<string, number | null>;
+  setRemainingMap: React.Dispatch<React.SetStateAction<Record<string, number | null>>>;
+  savingLineId: string | null;
+  setSavingLineId: (id: string | null) => void;
+}
+
+const EndOfDayReportTab: React.FC<EndOfDayReportTabProps> = ({
+  reportDate,
+  setReportDate,
+  remainingMap,
+  setRemainingMap,
+  savingLineId,
+  setSavingLineId,
+}) => {
+  const queryClient = useQueryClient();
+  const dateStr = reportDate.format('YYYY-MM-DD');
+
+  // Init + load report
+  const { data: report, isLoading: reportLoading, refetch } = useQuery({
+    queryKey: ['daily-report', dateStr],
+    queryFn: () => dailyReportService.init(dateStr),
+  });
+
+  const { data: lines = [], isLoading: linesLoading } = useQuery<DailyReportLine[]>({
+    queryKey: ['daily-report-lines', report?.id],
+    queryFn: () => dailyReportService.getLines(report!.id),
+    enabled: !!report?.id,
+  });
+
+  const isFinalized = report?.status === 'FINALIZED';
+
+  // Save remaining mutation
+  const saveMutation = useMutation({
+    mutationFn: ({ lineId, qty }: { lineId: string; qty: number }) =>
+      dailyReportService.updateRemaining(report!.id, lineId, qty),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['daily-report-lines', report?.id] });
+    },
+    onError: () => message.error('Lưu thất bại'),
+    onSettled: () => setSavingLineId(null),
+  });
+
+  const handleSave = useCallback(
+    (lineId: string) => {
+      const qty = remainingMap[lineId];
+      if (qty === null || qty === undefined || !report?.id) return;
+      setSavingLineId(lineId);
+      saveMutation.mutate({ lineId, qty });
+    },
+    [remainingMap, report?.id, saveMutation, setSavingLineId],
+  );
+
+  const columns: ColumnsType<DailyReportLine> = [
+    {
+      title: 'Sản Phẩm',
+      key: 'product',
+      render: (_, r) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{r.item.name}</div>
+          <Text type="secondary" style={{ fontSize: 11 }}>{r.item.key}</Text>
+        </div>
+      ),
+    },
+    {
+      title: 'Tồn Bếp',
+      dataIndex: 'qtyKitchenOpen',
+      align: 'right',
+      width: 90,
+      render: (v) => v ?? 0,
+    },
+    {
+      title: 'Bánh Ra Hôm Nay',
+      dataIndex: 'qtyProduced',
+      align: 'right',
+      width: 130,
+      render: (v) => <Text style={{ color: '#52c41a' }}>{v ?? 0}</Text>,
+    },
+    {
+      title: 'Đã Giao Shop',
+      dataIndex: 'qtyDelivered',
+      align: 'right',
+      width: 110,
+      render: (v) => <Text style={{ color: '#1677ff' }}>{v ?? 0}</Text>,
+    },
+    {
+      title: 'Còn Lại *',
+      key: 'conLai',
+      align: 'right',
+      width: 120,
+      render: (_, row) => {
+        if (isFinalized) {
+          return row.qtyRemainingActual !== undefined
+            ? <Text strong>{row.qtyRemainingActual}</Text>
+            : <Text type="secondary">—</Text>;
+        }
+        return (
+          <InputNumber
+            min={0}
+            size="small"
+            style={{ width: 85 }}
+            value={remainingMap[row.id] !== undefined ? remainingMap[row.id] : row.qtyRemainingActual}
+            placeholder="0"
+            onChange={(v) => setRemainingMap((prev) => ({ ...prev, [row.id]: v }))}
+            onBlur={() => handleSave(row.id)}
+            onPressEnter={() => handleSave(row.id)}
+            loading={savingLineId === row.id}
+          />
+        );
+      },
+    },
+    {
+      title: 'Ghi Chú',
+      width: 140,
+      render: () => (
+        <Input size="small" placeholder="tùy chọn" />
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      {/* Header */}
+      <Row align="middle" justify="space-between" style={{ marginBottom: 16 }}>
+        <Col>
+          <Space>
+            <Text strong style={{ fontSize: 15 }}>
+              Báo cáo cuối ngày — Kho Bếp
+            </Text>
+            {report && (
+              <Tag color={isFinalized ? 'green' : 'orange'}>
+                {isFinalized ? '✅ Đã chốt' : 'Draft'}
+              </Tag>
+            )}
+          </Space>
+        </Col>
+        <Col>
+          <Space>
+            <DatePicker
+              value={reportDate}
+              onChange={(d) => d && setReportDate(d)}
+              format="DD/MM/YYYY"
+              disabledDate={(d) => d.isAfter(dayjs())}
+            />
+            <Button icon={<ReloadOutlined />} onClick={() => refetch()} loading={reportLoading} />
+          </Space>
+        </Col>
+      </Row>
+
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="Tồn bếp = Kho bếp hiện tại (tồn tối + làm mới - đã giao). Nhân viên chỉ điền Còn Lại sau khi đếm thực tế."
+      />
+
+      <Table<DailyReportLine>
+        dataSource={lines}
+        columns={columns}
+        rowKey="id"
+        loading={reportLoading || linesLoading}
+        pagination={false}
+        size="middle"
+        locale={{
+          emptyText: (
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <Text type="secondary">
+                  Chưa có dữ liệu SX / giao nhận cho ngày{' '}
+                  <Text strong>{reportDate.format('DD/MM/YYYY')}</Text>
+                </Text>
+              }
+            />
+          ),
+        }}
+      />
+
+      {!isFinalized && lines.length > 0 && (
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <Button
+            type="primary"
+            size="large"
+            onClick={() => message.success('Đã nộp báo cáo cuối ngày!')}
+          >
+            🔔 Nộp báo cáo cuối ngày
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const KitchenWarehouse: React.FC = () => {
   const queryClient = useQueryClient();
   const [searchText, setSearchText] = useState('');
+
+  // ── End-of-day report state ───────────────────────────────────────────────
+  const [reportDate, setReportDate] = useState<Dayjs>(dayjs());
+  const [remainingMap, setRemainingMap] = useState<Record<string, number | null>>({});
+  const [savingLineId, setSavingLineId] = useState<string | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<UnifiedTransactionResponse | null>(null);
@@ -486,6 +690,24 @@ const KitchenWarehouse: React.FC = () => {
           }}
         />
       ),
+    },
+    // ─── Tab 3: Báo cáo cuối ngày ─────────────────────────────────────────
+    {
+      key: 'bao-cao-cuoi-ngay',
+      label: (
+        <Space>
+          <FileTextOutlined />
+          Báo Cáo Cuối Ngày
+        </Space>
+      ),
+      children: <EndOfDayReportTab
+        reportDate={reportDate}
+        setReportDate={setReportDate}
+        remainingMap={remainingMap}
+        setRemainingMap={setRemainingMap}
+        savingLineId={savingLineId}
+        setSavingLineId={setSavingLineId}
+      />,
     },
   ];
 

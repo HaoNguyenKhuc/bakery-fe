@@ -42,6 +42,9 @@ const StockDetailPage = React.lazy(() => import('./pages/Warehouse/StockDetailPa
 const ProductOrder = React.lazy(() => import('./pages/Warehouse/ProductOrder'));
 const UserRoles = React.lazy(() => import('./pages/Settings/UserRoles'));
 const UserProfiles = React.lazy(() => import('./pages/Settings/UserProfiles'));
+const KitchenDelivery = React.lazy(() => import('./pages/Production/KitchenDelivery'));
+const DailyReport = React.lazy(() => import('./pages/Reports/DailyReport'));
+const POSSales = React.lazy(() => import('./pages/Reports/POSSales'));
 
 // ── Suspense wrapper ───────────────────────────────────────────────────────────
 
@@ -127,6 +130,13 @@ const App: React.FC = () => {
         {/* Settings module */}
         <Route path="settings/user-roles" element={<Lazy><UserRoles /></Lazy>} />
         <Route path="settings/user-profiles" element={<Lazy><UserProfiles /></Lazy>} />
+
+        {/* Production — Giao nhận bếp → shop */}
+        <Route path="production/delivery" element={<Lazy><KitchenDelivery /></Lazy>} />
+
+        {/* Reports module */}
+        <Route path="reports/daily" element={<Lazy><DailyReport /></Lazy>} />
+        <Route path="reports/pos-sales" element={<Lazy><POSSales /></Lazy>} />
 
         {/* Catch-all: redirect unknown paths to dashboard */}
         <Route path="*" element={<Navigate to="/" replace />} />

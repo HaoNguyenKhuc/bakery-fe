@@ -15,3 +15,6 @@ export { default as itemService } from './itemService';
 export { default as itemGroupService } from './itemGroupService';
 export { default as productionGroupService } from './productionGroupService';
 export { default as thresholdRuleService } from './thresholdRuleService';
+export { default as posSaleService } from './posSaleService';
+export { default as dailyReportService } from './dailyReportService';
+export { default as deliveryRecordService } from './deliveryRecordService';

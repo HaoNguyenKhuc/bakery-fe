@@ -24,6 +24,10 @@ import {
   OrderedListOutlined,
   ToolOutlined,
   ScheduleOutlined,
+  SwapOutlined,
+  BarChartOutlined,
+  FileTextOutlined,
+  ShoppingCartOutlined,
 } from '@ant-design/icons';
 import { useAuthStore, useAppStore, selectSidebarCollapsed, selectUnreadCount } from '../../store';
 import { useWarehouseStore } from '../../store';
@@ -48,6 +52,7 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/production/requests': 'Lệnh Sản Xuất',
   '/production/requests/create': 'Tạo Lệnh Sản Xuất',
   '/production/requests/edit': 'Chỉnh Sửa Lệnh Sản Xuất',
+  '/production/delivery': 'Giao Nhận Bếp → Shop',
   '/warehouse': 'Kho',
   '/warehouse/main': 'Kho Tổng',
   '/warehouse/kitchen': 'Kho Bếp',
@@ -56,6 +61,8 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/warehouse/goods-transfer': 'Luân Chuyển Kho',
   '/warehouse/inventory-adjustment': 'Phiếu Thất Thoát',
   '/warehouse/product-orders': 'Quản Lý Đơn Hàng',
+  '/reports/daily': 'Báo Cáo Ngày',
+  '/reports/pos-sales': 'POS Sales',
   '/settings': 'Cài Đặt',
   '/settings/user-roles': 'User Roles',
   '/settings/user-profiles': 'User Profiles',
@@ -149,6 +156,11 @@ const STATIC_MENU_ITEMS_BEFORE: MenuItem[] = [
         icon: <OrderedListOutlined />,
         label: 'Lệnh Sản Xuất',
       },
+      {
+        key: '/production/delivery',
+        icon: <SwapOutlined />,
+        label: 'Giao Nhận',
+      },
     ],
   },
 ];
@@ -158,6 +170,23 @@ const STATIC_MENU_ITEMS_AFTER: MenuItem[] = [
     key: '/warehouse/product-orders',
     icon: <OrderedListOutlined />,
     label: 'Quản Lý Đơn Hàng',
+  },
+  {
+    key: 'reports',
+    icon: <BarChartOutlined />,
+    label: 'Báo Cáo',
+    children: [
+      {
+        key: '/reports/daily',
+        icon: <FileTextOutlined />,
+        label: 'Báo Cáo Ngày',
+      },
+      {
+        key: '/reports/pos-sales',
+        icon: <ShoppingCartOutlined />,
+        label: 'POS Sales',
+      },
+    ],
   },
   {
     key: 'settings',
@@ -218,7 +247,9 @@ const MainLayout: React.FC = () => {
 
   const getOpenKeyFromPath = (pathname: string): string[] => {
     if (pathname.startsWith('/products')) return ['products'];
+    if (pathname.startsWith('/production')) return ['production'];
     if (pathname.startsWith('/warehouse')) return ['warehouse'];
+    if (pathname.startsWith('/reports')) return ['reports'];
     if (pathname.startsWith('/settings')) return ['settings'];
     return [];
   };
