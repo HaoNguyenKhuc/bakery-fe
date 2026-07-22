@@ -85,31 +85,20 @@ const inventoryService = {
 
   // ── INVENTORY REQUESTS (PHIẾU NHẬP / XUẤT) ───────────────────
 
-  /**
-   * GET /api/v1/inventory-requests/by-warehouse?warehouseCode={CODE}&approvalStatus={STATUS}
-   *
-   * @param warehouseCode  Mã kho từ Branch.code (VD: MAIN, BEP_01, SHOP_01)
-   * @param approvalStatus PENDING_APPROVAL | APPROVED | REJECTED
-   * @param page           Trang (0-based, mặc định 0)
-   * @param size           Số dòng mỗi trang (mặc định 50)
-   */
-  getRequests: (params: {
-    warehouseCode: string;
-    approvalStatus: 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
-    page?: number;
-    size?: number;
-  }) => {
+  getRequests: (params: { warehouseCode?: string, approvalStatus?: string, size?: number, page?: number }) => {
     const qs = new URLSearchParams();
-    qs.set('warehouseCode', params.warehouseCode);
-    qs.set('approvalStatus', params.approvalStatus);
-    if (params.page != null) qs.set('page', String(params.page));
-    if (params.size != null) qs.set('size', String(params.size));
-
-    return api.get<import('../../types').UnifiedTransactionResponse[]>(
-      `/api/v1/inventory-requests/by-warehouse?${qs.toString()}`,
-    );
+    if (params.size) qs.set('size', String(params.size));
+    if (params.page) qs.set('page', String(params.page));
+    
+    if (params.warehouseCode) {
+      qs.set('warehouseCode', params.warehouseCode);
+      if (params.approvalStatus) qs.set('approvalStatus', params.approvalStatus);
+      return api.get<UnifiedTransactionResponse[]>(`/api/v1/inventory-requests/by-warehouse?${qs.toString()}`);
+    } else {
+      if (params.approvalStatus) qs.set('approvalStatus', params.approvalStatus); // try to pass it anyway
+      return api.get<UnifiedTransactionResponse[]>(`/api/v1/inventory-requests?${qs.toString()}`);
+    }
   },
-
   createRequest: (data: import('../../types').InventoryRequestPayload) =>
     api.post<UnifiedTransactionResponse>('/api/v1/inventory-requests', data),
 

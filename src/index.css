@@ -615,3 +615,8 @@ body {
 .fullscreen-modal-wrap .ant-modal .ant-modal-container {
   height: 100%
 }
+
+/* Hide empty tab content wrappers used for pure navigation */
+.nav-tabs-only .ant-tabs-content-holder {
+  display: none;
+}
