@@ -17,7 +17,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { transactionService, inventoryService } from '../../../api/services';
 import dailyReportService from '../../../api/services/dailyReportService';
 import { useWarehouseStore } from '../../../store';
-import RejectModal from '../components/RejectModal';
+import RejectModal from '../InventoryRequests/components/RejectModal';
 import type { DailyReportLine } from '../../../types/dailyReport';
 
 import { useNavigate } from 'react-router-dom';

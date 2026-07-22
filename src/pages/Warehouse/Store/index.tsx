@@ -24,7 +24,7 @@ import type {
 } from '../../../types';
 import { transactionService, inventoryService } from '../../../api/services';
 import { useWarehouseStore } from '../../../store';
-import RejectModal from '../components/RejectModal';
+import RejectModal from '../InventoryRequests/components/RejectModal';
 import { useNavigate } from 'react-router-dom';
 
 

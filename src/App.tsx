@@ -31,10 +31,7 @@ const ProdAdjustments = React.lazy(() => import('./pages/ProdAdjustments'));
 
 // Kho
 const MainWarehouse = React.lazy(() => import('./pages/Warehouse/Main'));
-const GoodsTransfer = React.lazy(() => import('./pages/Warehouse/GoodsTransfer'));
-const PurchaseForm = React.lazy(() => import('./pages/Warehouse/components/PurchaseForm'));
-const TransferForm = React.lazy(() => import('./pages/Warehouse/components/TransferForm'));
-const AdjustForm = React.lazy(() => import('./pages/Warehouse/components/AdjustForm'));
+const InventoryRequests = React.lazy(() => import('./pages/Warehouse/InventoryRequests'));
 
 // Báo cáo
 const DailyReport = React.lazy(() => import('./pages/Reports/DailyReport'));
@@ -104,10 +101,7 @@ const App: React.FC = () => {
 
         {/* ── Kho ── */}
         <Route path="stock-summary" element={<Lazy><MainWarehouse /></Lazy>} />
-        <Route path="inventory-requests" element={<Lazy><GoodsTransfer /></Lazy>} />
-        <Route path="warehouse/main/purchase" element={<Lazy><PurchaseForm /></Lazy>} />
-        <Route path="warehouse/transfer/:warehouseCode" element={<Lazy><TransferForm /></Lazy>} />
-        <Route path="warehouse/adjust/:warehouseCode" element={<Lazy><AdjustForm /></Lazy>} />
+        <Route path="inventory-requests" element={<Lazy><InventoryRequests /></Lazy>} />
 
         {/* ── Báo cáo ── */}
         <Route path="reports/daily" element={<Lazy><DailyReport /></Lazy>} />
