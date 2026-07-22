@@ -5,13 +5,14 @@ import {
 } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
-import productionService from '../../../api/services/productionService';
-import type { ProductionPlan, ProductionPlanLine } from '../../../types';
+import productionService from '../../api/services/productionService';
+import type { ProductionPlan, ProductionPlanLine } from '../../types';
 import {
   CheckCircleOutlined, CloseCircleOutlined,
   ReloadOutlined, ExportOutlined, CalendarOutlined,
   InfoCircleOutlined,
 } from '@ant-design/icons';
+import '../../styles/production-plans.css';
 
 const { Text } = Typography;
 
@@ -259,7 +260,19 @@ const DailyPlan: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div>
+    <div className="pp-page">
+      <div className="pp-header">
+        <div className="pp-header__left">
+          <div className="pp-header__icon">
+            <CalendarOutlined />
+          </div>
+          <div>
+            <h1 className="pp-header__title">Kế hoạch Ngày</h1>
+            <p className="pp-header__sub">Quản lý kế hoạch sản xuất hàng ngày</p>
+          </div>
+        </div>
+      </div>
+      <main className="pp-content">
       {/* Toolbar */}
       <div className="pp-toolbar">
         <div className="pp-toolbar__left">
@@ -437,6 +450,7 @@ const DailyPlan: React.FC = () => {
           ))}
         </>
       )}
+      </main>
     </div>
   );
 };

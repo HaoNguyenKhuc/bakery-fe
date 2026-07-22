@@ -13,10 +13,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemService, itemGroupService, productionGroupService } from '../../api/services';
 import type { ProductionGroup, ProductionGroupRequest } from '../../types';
-import ThresholdRulesTab from './ThresholdRules';
-import DailyPlanTab from './DailyPlan';
-import ProductionConfigTab from './ProductionConfig';
-import './production-plans.css';
+import '../../styles/production-plans.css';
 
 const { Text } = Typography;
 
@@ -357,8 +354,27 @@ const ProductionGroups: React.FC = () => {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div>
-      {/* Form section */}
+    <div className="pp-page">
+      <div className="pp-header">
+        <div className="pp-header__left">
+          <div className="pp-header__icon">
+            <ToolOutlined />
+          </div>
+          <div>
+            <h1 className="pp-header__title">Production Groups</h1>
+            <p className="pp-header__sub">Quản lý nhóm sản xuất</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 'var(--pp-space-md)' }}>
+          <Tooltip title="Làm mới dữ liệu">
+            <button className="pp-btn pp-btn--ghost" style={{ fontSize: 'var(--pp-text-sm)' }} aria-label="Refresh" onClick={refetch}>
+              <ReloadOutlined />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+      <main className="pp-content">
+        {/* Form section */}
       <div className="pp-form-section" style={{ marginBottom: 'var(--pp-space-md)' }}>
         <div className="pp-form-section__head">
           <span className="pp-form-section__label">
@@ -520,108 +536,10 @@ const ProductionGroups: React.FC = () => {
             }}
           />
         </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Tab definitions ─────────────────────────────────────────────────────────────
-interface TabDef {
-  key: string;
-  icon: React.ReactNode;
-  label: string;
-  component: React.ReactNode;
-}
-
-// ── Page Wrapper ───────────────────────────────────────────────────────────────
-const ProductionGroupsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('daily-plan');
-
-  const tabs: TabDef[] = [
-    {
-      key: 'daily-plan',
-      icon: <CalendarOutlined />,
-      label: 'Kế hoạch ngày',
-      component: <DailyPlanTab />,
-    },
-    {
-      key: 'config',
-      icon: <AppstoreOutlined />,
-      label: 'Cấu hình SX',
-      component: (
-        <ProductionConfigTab
-          onNavigateToGroup={() => setActiveTab('groups')}
-          onNavigateToRule={() => setActiveTab('threshold-rules')}
-        />
-      ),
-    },
-    {
-      key: 'groups',
-      icon: <ToolOutlined />,
-      label: 'Production Groups',
-      component: <ProductionGroups />,
-    },
-    {
-      key: 'threshold-rules',
-      icon: <ThunderboltOutlined />,
-      label: 'Threshold Rules',
-      component: <ThresholdRulesTab />,
-    },
-  ];
-
-  const activeTabDef = tabs.find((t) => t.key === activeTab);
-
-  return (
-    <div className="pp-page">
-      {/* ── Page header ── */}
-      <div className="pp-header">
-        <div className="pp-header__left">
-          <div className="pp-header__icon">
-            <SettingOutlined />
-          </div>
-          <div>
-            <h1 className="pp-header__title">Kế hoạch Sản xuất</h1>
-            <p className="pp-header__sub">Quản lý nhóm SX, threshold rules và kế hoạch hàng ngày</p>
-          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 'var(--pp-space-md)' }}>
-          <Tooltip title="Làm mới dữ liệu">
-            <button className="pp-btn pp-btn--ghost" style={{ fontSize: 'var(--pp-text-sm)' }} aria-label="Refresh">
-              <ReloadOutlined />
-            </button>
-          </Tooltip>
-        </div>
-      </div>
-
-      {/* ── Tab bar ── */}
-      <nav className="pp-tabs" role="tablist" aria-label="Production tabs">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            aria-selected={activeTab === tab.key}
-            aria-controls={`pp-panel-${tab.key}`}
-            id={`pp-tab-${tab.key}`}
-            className={`pp-tab${activeTab === tab.key ? ' pp-tab--active' : ''}`}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            <span className="pp-tab__icon">{tab.icon}</span>
-            {tab.label}
-          </button>
-        ))}
-      </nav>
-
-      {/* ── Tab panel ── */}
-      <main
-        id={`pp-panel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`pp-tab-${activeTab}`}
-        className="pp-content"
-      >
-        {activeTabDef?.component}
       </main>
     </div>
   );
 };
 
-export default ProductionGroupsPage;
+export default ProductionGroups;

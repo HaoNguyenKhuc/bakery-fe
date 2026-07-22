@@ -19,8 +19,9 @@ const ItemGroupList = React.lazy(() => import('./pages/Product/ItemGroup'));
 
 // Kế hoạch SX
 const SxConfig = React.lazy(() => import('./pages/SxConfig'));
-const ProductionPlanning = React.lazy(() => import('./pages/ProductionGroups'));
+const ProdGroups = React.lazy(() => import('./pages/ProdGroups'));
 const ThresholdRules = React.lazy(() => import('./pages/ThresholdRules'));
+const ProdPlans = React.lazy(() => import('./pages/ProdPlans'));
 
 // Sản xuất
 const ProductionRequestList = React.lazy(() => import('./pages/ProductionRequests'));
@@ -90,9 +91,9 @@ const App: React.FC = () => {
 
         {/* ── Kế hoạch SX ── */}
         <Route path="sx-config" element={<Lazy><SxConfig /></Lazy>} />
-        <Route path="prod-groups" element={<Lazy><ProductionPlanning /></Lazy>} />
+        <Route path="prod-groups" element={<Lazy><ProdGroups /></Lazy>} />
         <Route path="threshold-rules" element={<Lazy><ThresholdRules /></Lazy>} />
-        <Route path="prod-plans" element={<Lazy><ProductionPlanning /></Lazy>} />
+        <Route path="prod-plans" element={<Lazy><ProdPlans /></Lazy>} />
 
         {/* ── Sản xuất ── */}
         <Route path="prod-requests" element={<Lazy><ProductionRequestList /></Lazy>} />

@@ -1,342 +1,363 @@
-import React, { useEffect, useState } from 'react';
-import { Card, Table, Tag, Button, Space, Typography, Spin, Alert, message } from 'antd';
+import React, { useMemo } from 'react';
+import { Table, Space, Spin, Tag, Row, Col } from 'antd';
+import { useQuery, useQueries } from '@tanstack/react-query';
+import { itemService, productionGroupService, thresholdRuleService } from '../../api/services';
+import type { ProductionGroup, ThresholdRule } from '../../types';
+import { AppstoreOutlined, ThunderboltOutlined, WarningOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import productionGroupService from '../../api/services/productionGroupService';
-import thresholdRuleService from '../../api/services/thresholdRuleService';
-import itemService from '../../api/services/itemService';
-import type { ProductionGroup, Item, ThresholdRule } from '../../types';
+import '../../styles/production-plans.css';
 
-const { Title, Text } = Typography;
+const extractArray = (data: any): any[] => {
+  if (Array.isArray(data)) return data;
+  if (data?.content) return data.content;
+  if (data?.data) return data.data;
+  return [];
+};
 
-interface ProductWithRules {
-  product: Item;
-  rules: ThresholdRule[];
-}
-
-const SxConfigPage: React.FC = () => {
+const ProductionConfig: React.FC = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState<boolean>(true);
-  const [groups, setGroups] = useState<ProductionGroup[]>([]);
-  const [withRules, setWithRules] = useState<ProductWithRules[]>([]);
-  const [noConfig, setNoConfig] = useState<Item[]>([]);
+  // ── Queries ─────────────────────────────────────────────────────────────────
+  const { data: groupsRaw = [], isLoading: groupsLoading } = useQuery({
+    queryKey: ['production-groups'],
+    queryFn: () => productionGroupService.getAll(),
+  });
+  const groups: ProductionGroup[] = extractArray(groupsRaw);
 
-  const loadSxConfig = async () => {
-    setLoading(true);
-    try {
-      const [pgData, productsData] = await Promise.all([
-        productionGroupService.getAll().catch(() => []),
-        itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT' }).catch(() => []),
-      ]);
+  const { data: allItemsRaw = [], isLoading: itemsLoading } = useQuery({
+    queryKey: ['items', 'all'],
+    queryFn: () => itemService.getAllItemsUnpaginated(),
+  });
+  const allItems = extractArray(allItemsRaw);
+  const products = useMemo(() => allItems.filter((i: any) => i.itemType === 'PRODUCT'), [allItems]);
 
-      setGroups(pgData || []);
+  // Items in groups
+  const groupedItemIds = useMemo(() => {
+    const ids = new Set<string>();
+    groups.forEach((g) => {
+      (g.items || []).forEach((gi) => ids.add(gi.itemId));
+    });
+    return ids;
+  }, [groups]);
 
-      // Items that belong to a group
-      const groupedItemIds = new Set<string>(
-        (pgData || []).flatMap((g) => (g.items || []).map((gi: any) => gi.itemId))
-      );
+  // Simple products not in any group
+  const simpleProducts = useMemo(() => products.filter((p) => !groupedItemIds.has(p.id)), [products, groupedItemIds]);
 
-      // Simple products (not in any group)
-      const simpleProducts = (productsData || []).filter((p) => !groupedItemIds.has(p.id));
+  const ruleQueries = useQueries({
+    queries: simpleProducts.map((p) => ({
+      queryKey: ['threshold-rules', p.id],
+      queryFn: () => thresholdRuleService.getRulesByItem(p.id),
+      staleTime: 60_000,
+    })),
+  });
 
-      // Fetch rules for simple products
-      const ruleResults = await Promise.all(
-        simpleProducts.map(async (p) => {
-          try {
-            const rules = await thresholdRuleService.getRulesByItem(p.id);
-            return { product: p, rules: rules || [] };
-          } catch {
-            return { product: p, rules: [] };
-          }
-        })
-      );
+  const isLoadingRules = ruleQueries.some(q => q.isLoading);
+  const isLoading = groupsLoading || itemsLoading || isLoadingRules;
 
-      const hasRulesList = ruleResults.filter((r) => r.rules.length > 0);
-      const noConfigList = simpleProducts.filter(
-        (p) => !hasRulesList.find((r) => r.product.id === p.id)
-      );
+  const simpleProductsWithRules = useMemo(() => {
+    return simpleProducts.map((p, i) => ({
+      product: p,
+      rules: ruleQueries[i].data || []
+    })).filter(x => x.rules.length > 0);
+  }, [simpleProducts, ruleQueries]);
 
-      setWithRules(hasRulesList);
-      setNoConfig(noConfigList);
-    } catch (err: any) {
-      message.error(err.message || 'Lỗi khi tải cấu hình sản xuất');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const noConfigProducts = useMemo(() => {
+    const withRulesIds = new Set(simpleProductsWithRules.map(x => x.product.id));
+    return simpleProducts.filter(p => !withRulesIds.has(p.id));
+  }, [simpleProducts, simpleProductsWithRules]);
 
-  useEffect(() => {
-    loadSxConfig();
-  }, []);
+  const freeGroups = groups.filter(g => g.groupType === 'FREE_GROUP');
+  const batchGroups = groups.filter(g => g.groupType === 'BATCH_FORMULA');
 
-  const freeGroups = groups.filter((g) => g.groupType === 'FREE_GROUP');
-  const batchGroups = groups.filter((g) => g.groupType === 'BATCH_FORMULA');
-
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: 40 }}>
-        <Spin size="large" tip="Đang tải cấu hình sản xuất..." />
-      </div>
-    );
+  if (isLoading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--pp-space-2xl)' }}><Spin size="large" /></div>;
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      {/* FREE GROUP SECTION */}
-      <Card
-        title={
-          <Title level={5} style={{ margin: 0 }}>
-            🔢 FREE GROUP — Nhân viên phân bổ nội bộ
-          </Title>
-        }
-        style={{ marginBottom: 16 }}
-        extra={<Button onClick={() => navigate('/prod-groups')}>Quản lý Prod Groups</Button>}
-      >
-        {freeGroups.length === 0 ? (
-          <Text type="secondary">Chưa có Free Group nào</Text>
-        ) : (
-          <Table
-            dataSource={freeGroups.flatMap((g) =>
-              (g.items || []).map((gi: any, idx: number) => ({
-                ...gi,
-                groupName: g.name,
-                groupCode: g.code,
-                targetWeekday: g.targetWeekday,
-                targetWeekend: g.targetWeekend,
-                thresholdPercent: g.thresholdPercent,
-                isFirst: idx === 0,
-                rowCount: g.items?.length || 1,
-                rowKey: `${g.id}-${gi.itemId || idx}`,
-              }))
-            )}
-            rowKey="rowKey"
-            pagination={false}
-            size="small"
-            columns={[
-              {
-                title: 'Nhóm',
-                dataIndex: 'groupName',
-                key: 'groupName',
-                render: (text: string, record: any) => ({
-                  children: (
-                    <div>
-                      <strong>{text}</strong>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>{record.groupCode}</Text>
-                    </div>
-                  ),
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-              {
-                title: 'Sản phẩm',
-                dataIndex: 'item',
-                key: 'item',
-                render: (item: any) => item?.value || item?.name || item?.key || '—',
-              },
-              {
-                title: 'Target WD',
-                dataIndex: 'targetWeekday',
-                key: 'targetWeekday',
-                align: 'center',
-                render: (val: number, record: any) => ({
-                  children: <strong>{val ?? '—'}</strong>,
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-              {
-                title: 'Target WE',
-                dataIndex: 'targetWeekend',
-                key: 'targetWeekend',
-                align: 'center',
-                render: (val: number, record: any) => ({
-                  children: <strong>{val ?? '—'}</strong>,
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-              {
-                title: 'Ngưỡng %',
-                dataIndex: 'thresholdPercent',
-                key: 'thresholdPercent',
-                align: 'center',
-                render: (val: number, record: any) => ({
-                  children: val != null ? <Tag color="warning">&lt;{val}%</Tag> : <Text type="secondary">luôn SX</Text>,
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-            ]}
-          />
-        )}
-      </Card>
-
-      {/* BATCH FORMULA SECTION */}
-      <Card
-        title={
-          <Title level={5} style={{ margin: 0 }}>
-            🧪 BATCH FORMULA — Theo cối
-          </Title>
-        }
-        style={{ marginBottom: 16 }}
-      >
-        {batchGroups.length === 0 ? (
-          <Text type="secondary">Chưa có Batch Formula Group nào</Text>
-        ) : (
-          <Table
-            dataSource={batchGroups.flatMap((g) =>
-              (g.items || []).map((gi: any, idx: number) => ({
-                ...gi,
-                groupName: g.name,
-                groupCode: g.code,
-                batchWeightKg: g.batchWeightGrams ? (g.batchWeightGrams / 1000).toFixed(1) + 'kg' : '—',
-                isFirst: idx === 0,
-                rowCount: g.items?.length || 1,
-                rowKey: `${g.id}-${gi.itemId || idx}`,
-              }))
-            )}
-            rowKey="rowKey"
-            pagination={false}
-            size="small"
-            columns={[
-              {
-                title: 'Nhóm',
-                dataIndex: 'groupName',
-                key: 'groupName',
-                render: (text: string, record: any) => ({
-                  children: (
-                    <div>
-                      <strong>{text}</strong>
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>{record.groupCode}</Text>
-                    </div>
-                  ),
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-              {
-                title: 'Sản phẩm',
-                dataIndex: 'item',
-                key: 'item',
-                render: (item: any) => item?.value || item?.name || item?.key || '—',
-              },
-              {
-                title: 'Gram/cái',
-                dataIndex: 'gramsPerUnit',
-                key: 'gramsPerUnit',
-                align: 'right',
-                render: (val: number) => (val ? `${val}g` : '—'),
-              },
-              {
-                title: 'Cối (kg)',
-                dataIndex: 'batchWeightKg',
-                key: 'batchWeightKg',
-                align: 'right',
-                render: (val: string, record: any) => ({
-                  children: <strong>{val}</strong>,
-                  props: { rowSpan: record.isFirst ? record.rowCount : 0 },
-                }),
-              },
-            ]}
-          />
-        )}
-      </Card>
-
-      {/* SIMPLE RULES SECTION */}
-      <Card
-        title={
-          <Title level={5} style={{ margin: 0 }}>
-            📏 SIMPLE RULES — Ngưỡng theo từng sản phẩm
-          </Title>
-        }
-        style={{ marginBottom: 16 }}
-        extra={<Button onClick={() => navigate('/threshold-rules')}>Cấu hình Threshold Rules</Button>}
-      >
-        <Table
-          dataSource={withRules}
-          rowKey={(r) => r.product.id}
-          pagination={false}
-          size="small"
-          columns={[
-            {
-              title: 'Sản phẩm',
-              dataIndex: 'product',
-              key: 'product',
-              render: (p: Item) => (
-                <span>
-                  <code>{p.code}</code> {p.name}
+    <div className="pp-page">
+      <div className="pp-header">
+        <div className="pp-header__left">
+          <div className="pp-header__icon">
+            <AppstoreOutlined />
+          </div>
+          <div>
+            <h1 className="pp-header__title">Cấu hình SX</h1>
+            <p className="pp-header__sub">Tổng quan cấu hình sản xuất</p>
+          </div>
+        </div>
+      </div>
+      <main className="pp-content">
+      <Row gutter={[16, 16]}>
+        
+        {/* FREE_GROUP */}
+        {freeGroups.length > 0 && (
+          <Col span={24}>
+            <div className="pp-card" style={{ marginBottom: 'var(--pp-space-sm)' }}>
+              <div className="pp-card__header">
+                <span className="pp-card__title">
+                  <span style={{ marginRight: 8 }}>🔢</span>
+                  FREE GROUP — Nhân viên phân bổ nội bộ
                 </span>
-              ),
-            },
-            {
-              title: 'WD rules',
-              key: 'wd',
-              align: 'center',
-              render: (_: any, r: ProductWithRules) => {
-                const count = r.rules.filter((rule) => rule.dayType === 'WEEKDAY').length;
-                return count ? <Tag color="blue">{count}</Tag> : '0';
-              },
-            },
-            {
-              title: 'WE rules',
-              key: 'we',
-              align: 'center',
-              render: (_: any, r: ProductWithRules) => {
-                const count = r.rules.filter((rule) => rule.dayType === 'WEEKEND').length;
-                return count ? <Tag color="purple">{count}</Tag> : '0';
-              },
-            },
-            {
-              title: 'Rule đầu tiên (WD)',
-              key: 'firstRule',
-              render: (_: any, r: ProductWithRules) => {
-                const first = r.rules.find((rule) => rule.dayType === 'WEEKDAY');
-                if (!first) return '—';
-                const cond =
-                  first.conditionType === 'COUNT'
-                    ? `tồn < ${first.conditionValue}`
-                    : `tồn < ${first.conditionValue}% × ${first.actionValue}`;
-                const act =
-                  first.actionType === 'PRODUCE_MORE'
-                    ? `làm thêm ${first.actionValue}`
-                    : `bù đủ ${first.actionValue}`;
-                return `${cond} → ${act}`;
-              },
-            },
-            {
-              title: 'Thao tác',
-              key: 'action',
-              render: (_: any, r: ProductWithRules) => (
-                <Button size="small" onClick={() => navigate(`/threshold-rules?itemId=${r.product.id}`)}>
-                  Sửa
-                </Button>
-              ),
-            },
-          ]}
-        />
-      </Card>
+              </div>
+              <div className="pp-table-wrap">
+                <Table
+                  size="small"
+                  dataSource={freeGroups.flatMap(g => (g.items || []).map((gi, idx) => ({ ...gi, group: g, isFirst: idx === 0, rowSpan: g.items?.length || 1 })))}
+                  rowKey={(r) => `${r.group.id}-${r.itemId}`}
+                  pagination={false}
+                  columns={[
+                    {
+                      title: 'Nhóm',
+                      dataIndex: 'group',
+                      render: (g, row) => ({
+                        children: (
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{g.name}</div>
+                            <div style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-3)' }}>{g.code}</div>
+                          </div>
+                        ),
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: 'Sản phẩm',
+                      dataIndex: 'itemId',
+                      render: (_, row) => (
+                        <span style={{ fontWeight: 500, fontSize: 'var(--pp-text-sm)' }}>
+                          {row.item?.name || row.item?.key || '?'}
+                        </span>
+                      ),
+                    },
+                    {
+                      title: 'Target WD',
+                      dataIndex: 'group',
+                      align: 'center',
+                      render: (g, row) => ({
+                        children: <span style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{g.targetWeekday ?? '—'}</span>,
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: 'Target WE',
+                      dataIndex: 'group',
+                      align: 'center',
+                      render: (g, row) => ({
+                        children: <span style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{g.targetWeekend ?? '—'}</span>,
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: 'Ngưỡng %',
+                      dataIndex: 'group',
+                      align: 'center',
+                      render: (g, row) => ({
+                        children: g.thresholdPercent != null
+                          ? <span className="pp-type-tag pp-type-tag--free">&lt;{g.thresholdPercent}%</span>
+                          : <span style={{ color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-xs)' }}>Luôn SX</span>,
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: '',
+                      width: 60,
+                      align: 'center',
+                      render: (_, row) => ({
+                        children: (
+                          <button className="pp-btn pp-btn--ghost" style={{ padding: '4px 10px', fontSize: 'var(--pp-text-xs)' }} onClick={() => navigate('/prod-groups')}>
+                            Sửa
+                          </button>
+                        ),
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    }
+                  ]}
+                />
+              </div>
+            </div>
+          </Col>
+        )}
 
-      {/* UNCONFIGURED SECTION */}
-      {noConfig.length > 0 && (
-        <Alert
-          message={`⚠️ Chưa cấu hình (${noConfig.length} sản phẩm)`}
-          description={
-            <Space wrap style={{ marginTop: 8 }}>
-              {noConfig.map((p) => (
-                <Tag
-                  key={p.id}
-                  color="warning"
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/threshold-rules?itemId=${p.id}`)}
-                >
-                  {p.code} — {p.name}
-                </Tag>
-              ))}
-            </Space>
-          }
-          type="warning"
-          showIcon
-        />
-      )}
+        {/* BATCH_FORMULA */}
+        {batchGroups.length > 0 && (
+          <Col span={24}>
+            <div className="pp-card" style={{ marginBottom: 'var(--pp-space-sm)' }}>
+              <div className="pp-card__header">
+                <span className="pp-card__title">
+                  <span style={{ marginRight: 8 }}>🧪</span>
+                  BATCH FORMULA — Sản xuất theo cối
+                </span>
+              </div>
+              <div className="pp-table-wrap">
+                <Table
+                  size="small"
+                  dataSource={batchGroups.flatMap(g => (g.items || []).map((gi, idx) => ({ ...gi, group: g, isFirst: idx === 0, rowSpan: g.items?.length || 1 })))}
+                  rowKey={(r) => `${r.group.id}-${r.itemId}`}
+                  pagination={false}
+                  columns={[
+                    {
+                      title: 'Nhóm',
+                      dataIndex: 'group',
+                      render: (g, row) => ({
+                        children: (
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{g.name}</div>
+                            <div style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-3)' }}>{g.code}</div>
+                          </div>
+                        ),
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: 'Sản phẩm',
+                      dataIndex: 'itemId',
+                      render: (_, row) => (
+                        <span style={{ fontWeight: 500, fontSize: 'var(--pp-text-sm)' }}>
+                          {row.item?.name || row.item?.key || '?'}
+                        </span>
+                      ),
+                    },
+                    {
+                      title: 'Gram / cái',
+                      dataIndex: 'gramsPerUnit',
+                      align: 'right',
+                      render: (val) => val ? (
+                        <span style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-sm)' }}>{val}g</span>
+                      ) : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
+                    },
+                    {
+                      title: 'Trọng lượng cối (kg)',
+                      dataIndex: 'group',
+                      align: 'right',
+                      render: (g, row) => ({
+                        children: g.batchWeightGrams ? (
+                          <span style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>
+                            {(g.batchWeightGrams / 1000).toFixed(1)}kg
+                          </span>
+                        ) : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    },
+                    {
+                      title: '',
+                      width: 60,
+                      align: 'center',
+                      render: (_, row) => ({
+                        children: (
+                          <button className="pp-btn pp-btn--ghost" style={{ padding: '4px 10px', fontSize: 'var(--pp-text-xs)' }} onClick={() => navigate('/prod-groups')}>
+                            Sửa
+                          </button>
+                        ),
+                        props: { rowSpan: row.isFirst ? row.rowSpan : 0 },
+                      }),
+                    }
+                  ]}
+                />
+              </div>
+            </div>
+          </Col>
+        )}
+
+        {/* SIMPLE RULES */}
+        {simpleProductsWithRules.length > 0 && (
+          <Col span={24}>
+            <div className="pp-card" style={{ marginBottom: 'var(--pp-space-sm)' }}>
+              <div className="pp-card__header">
+                <span className="pp-card__title">
+                  <span style={{ marginRight: 8 }}>📏</span>
+                  SIMPLE RULES — Cấu hình ngưỡng từng sản phẩm lẻ
+                </span>
+              </div>
+              <div className="pp-table-wrap">
+                <Table
+                  size="small"
+                  dataSource={simpleProductsWithRules}
+                  rowKey={(r) => r.product.id}
+                  pagination={false}
+                  columns={[
+                    {
+                      title: 'Sản phẩm',
+                      dataIndex: 'product',
+                      render: (p) => (
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{p.name}</div>
+                          <div style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-3)' }}>{p.code}</div>
+                        </div>
+                      ),
+                    },
+                    {
+                      title: 'WD rules',
+                      align: 'center',
+                      render: (_, row) => {
+                        const count = row.rules.filter(r => r.dayType === 'WEEKDAY').length;
+                        return count ? <span className="pp-tab__badge">{count}</span> : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>;
+                      },
+                    },
+                    {
+                      title: 'WE rules',
+                      align: 'center',
+                      render: (_, row) => {
+                        const count = row.rules.filter(r => r.dayType === 'WEEKEND').length;
+                        return count ? <span className="pp-tab__badge">{count}</span> : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>;
+                      },
+                    },
+                    {
+                      title: 'Rule đầu tiên (WD)',
+                      render: (_, row) => {
+                        const first = row.rules.filter(r => r.dayType === 'WEEKDAY')[0];
+                        if (!first) return <span style={{ color: 'var(--pp-ink-3)' }}>—</span>;
+                        const condition = first.conditionType === 'COUNT' ? `tồn < ${first.conditionValue}` : `tồn < ${first.conditionValue}% × ${first.actionValue}`;
+                        const action = first.actionType === 'PRODUCE_MORE' ? `làm thêm ${first.actionValue}` : `bù đủ ${first.actionValue}`;
+                        return <span style={{ fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-2)' }}>{condition} → {action}</span>;
+                      },
+                    },
+                    {
+                      title: '',
+                      width: 60,
+                      align: 'center',
+                      render: (_, row) => (
+                        <button className="pp-btn pp-btn--ghost" style={{ padding: '4px 10px', fontSize: 'var(--pp-text-xs)' }} onClick={() => navigate('/threshold-rules')}>
+                          Sửa
+                        </button>
+                      ),
+                    }
+                  ]}
+                />
+              </div>
+            </div>
+          </Col>
+        )}
+
+        {/* CHƯA CẤU HÌNH */}
+        {noConfigProducts.length > 0 && (
+          <Col span={24}>
+            <div className="pp-card" style={{ marginBottom: 'var(--pp-space-sm)', borderColor: 'var(--pp-warning)' }}>
+              <div className="pp-card__header" style={{ background: 'var(--pp-paper)' }}>
+                <span className="pp-card__title" style={{ color: 'var(--pp-warning)' }}>
+                  <WarningOutlined style={{ marginRight: 8 }} />
+                  Chưa cấu hình ({noConfigProducts.length} sản phẩm)
+                </span>
+              </div>
+              <div className="pp-card__body">
+                <Space size={[8, 8]} wrap>
+                  {noConfigProducts.map(p => (
+                    <button
+                      key={p.id}
+                      className="pp-btn pp-btn--ghost"
+                      style={{ padding: '2px 10px', fontSize: 'var(--pp-text-xs)', fontFamily: 'var(--pp-font-mono)' }}
+                      onClick={() => navigate('/threshold-rules')}
+                    >
+                      {p.code}
+                    </button>
+                  ))}
+                </Space>
+              </div>
+            </div>
+          </Col>
+        )}
+
+      </Row>
+      </main>
     </div>
   );
 };
 
-export default SxConfigPage;
+export default ProductionConfig;
