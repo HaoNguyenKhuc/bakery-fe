@@ -7,7 +7,7 @@ import {
 import {
   PlusOutlined, SearchOutlined, ImportOutlined, ExportOutlined,
   CheckOutlined, CloseOutlined,
-  DeleteOutlined, FormOutlined, InboxOutlined,
+  DeleteOutlined, FormOutlined, InboxOutlined, EyeOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';

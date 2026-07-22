@@ -6,6 +6,7 @@ import { ConfigProvider } from 'antd';
 import viVN from 'antd/es/locale/vi_VN';
 import App from './App';
 import './index.css';
+import './styles/dev-ui-tokens.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

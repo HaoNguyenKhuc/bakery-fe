@@ -16,6 +16,7 @@ import { useAuthStore } from '../../../../store';
 import { useNavigate } from 'react-router-dom';
 
 const { Text, Title } = Typography;
+const { TextArea } = Input;
 
 // ─── Dummy data ───────────────────────────────────────────────────────────────
 

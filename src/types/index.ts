@@ -1411,3 +1411,51 @@ export interface CompleteLineRequest {
   note?: string;
 }
 
+// ── SUPPLIER & PRODUCT MAPPING & PROD ADJUSTMENT ──
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  contactName?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  approvalStatus: ApprovalStatus | string;
+  createdAt?: string;
+}
+
+export interface SupplierRequest {
+  code: string;
+  name: string;
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+}
+
+export interface ProductMapping {
+  id: string;
+  item: ReferenceValue;
+  exCode: string;
+  sellingPrice?: number | null;
+  note?: string | null;
+}
+
+export interface ProductMappingRequest {
+  itemId: string;
+  exCode: string;
+  sellingPrice?: number | null;
+  note?: string | null;
+}
+
+export interface ProdAdjustment {
+  id: string;
+  productionRequestId?: string;
+  adjustmentType: 'INGREDIENT_VARIANCE' | 'PRODUCTION_WASTAGE';
+  reason?: string;
+  qtyDifference: number;
+  note?: string;
+  createdAt: string;
+}
+

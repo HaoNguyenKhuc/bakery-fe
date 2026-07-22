@@ -499,14 +499,6 @@ const ProductForm: React.FC = () => {
             );
           }}
         </Form.Item>
-
-        {/* Footer Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, paddingBottom: 24 }}>
-          <Button size="large" onClick={() => navigate('/products')}>Huỷ</Button>
-          <Button type="primary" size="large" htmlType="submit" icon={<SaveOutlined />} loading={mutation.isPending}>
-            {isEdit ? 'Lưu Cập Nhật' : 'Tạo sản phẩm'}
-          </Button>
-        </div>
       </Form>
     </div>
   );

@@ -91,7 +91,7 @@ const POSSales: React.FC = () => {
 
   // ── Totals ──────────────────────────────────────────────────────────────────
 
-  const totalQty = posData.reduce((sum, row) => sum + (row.qtyBan ?? 0), 0);
+  const totalQty = posData.reduce((sum, row) => sum + (row.qtySold ?? 0), 0);
   const mappedCount = posData.filter((r) => r.itemName).length;
 
   // ── Table columns ───────────────────────────────────────────────────────────
@@ -124,11 +124,18 @@ const POSSales: React.FC = () => {
         ),
     },
     {
-      title: 'Qty bán',
-      dataIndex: 'qtyBan',
+      title: 'SL bán',
+      dataIndex: 'qtySold',
       align: 'right',
       width: 90,
       render: (v: number) => <Text strong>{v}</Text>,
+    },
+    {
+      title: 'Doanh Thu',
+      dataIndex: 'totalAmount',
+      align: 'right',
+      width: 120,
+      render: (v: number) => <Text strong>{v?.toLocaleString('vi-VN')} đ</Text>,
     },
     {
       title: 'Ghi chú',

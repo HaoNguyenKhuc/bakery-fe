@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import {
-  Button, Card, Col, Divider, Form, Input, InputNumber,
-  message, Popconfirm, Row, Select, Space, Table, Tag,
-  Typography, Tooltip, Tabs
+  Button, Col, Divider, Form, Input, InputNumber,
+  message, Popconfirm, Row, Select, Space, Table,
+  Typography, Tooltip, Spin,
 } from 'antd';
 import {
   PlusOutlined, DeleteOutlined, ToolOutlined,
-  EditOutlined, DownOutlined, RightOutlined, SettingOutlined, CalendarOutlined, AppstoreOutlined
+  EditOutlined, DownOutlined, RightOutlined,
+  SettingOutlined, CalendarOutlined, AppstoreOutlined,
+  ReloadOutlined, ThunderboltOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemService, itemGroupService, productionGroupService } from '../../api/services';
@@ -14,8 +16,19 @@ import type { ProductionGroup, ProductionGroupRequest } from '../../types';
 import ThresholdRulesTab from './ThresholdRules';
 import DailyPlanTab from './DailyPlan';
 import ProductionConfigTab from './ProductionConfig';
+import './production-plans.css';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
+
+// ── Google Fonts (Space Grotesk) ─────────────────────────────────────────────
+if (typeof document !== 'undefined' && !document.getElementById('pp-gfonts')) {
+  const link = document.createElement('link');
+  link.id = 'pp-gfonts';
+  link.rel = 'stylesheet';
+  link.href =
+    'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap';
+  document.head.appendChild(link);
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const extractArray = (data: any): any[] => {
@@ -32,7 +45,23 @@ interface EditableGroupItem {
   sortOrder: number;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// ── Status pill ───────────────────────────────────────────────────────────────
+const StatusPill: React.FC<{ status?: string }> = ({ status }) => {
+  const cls =
+    status === 'DRAFT'     ? 'pp-status pp-status--draft'    :
+    status === 'APPROVED'  ? 'pp-status pp-status--approved'  :
+    status === 'REJECTED'  ? 'pp-status pp-status--rejected'  :
+    'pp-status pp-status--unknown';
+  return <span className={cls}>{status || 'UNKNOWN'}</span>;
+};
+
+// ── Type tag ──────────────────────────────────────────────────────────────────
+const TypeTag: React.FC<{ type: string }> = ({ type }) =>
+  type === 'FREE_GROUP'
+    ? <span className="pp-type-tag pp-type-tag--free">FREE</span>
+    : <span className="pp-type-tag pp-type-tag--batch">BATCH</span>;
+
+// ── ProductionGroups inner tab ────────────────────────────────────────────────
 const ProductionGroups: React.FC = () => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
@@ -80,7 +109,6 @@ const ProductionGroups: React.FC = () => {
 
   const refetch = () => queryClient.invalidateQueries({ queryKey: ['production-groups'] });
 
-  // ── Form helpers ─────────────────────────────────────────────────────────────
   const resetForm = () => {
     form.resetFields();
     setEditingId(null);
@@ -135,7 +163,6 @@ const ProductionGroups: React.FC = () => {
     }
   };
 
-  // ── Group Items editor ───────────────────────────────────────────────────────
   const addItem = () => {
     setGroupItems((prev) => [
       ...prev,
@@ -148,420 +175,451 @@ const ProductionGroups: React.FC = () => {
   };
 
   const isBatch = groupType === 'BATCH_FORMULA';
+  const isPending = createMut.isPending || updateMut.isPending;
 
-  // ── List table columns ───────────────────────────────────────────────────────
+  // ── Table columns ─────────────────────────────────────────────────────────────
   const columns = [
     {
       title: 'Code',
       dataIndex: 'code',
       width: 120,
-      render: (v: string) => <Text strong code>{v}</Text>,
+      render: (v: string) => (
+        <span style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', background: 'var(--pp-paper-3)', padding: '2px 6px', borderRadius: 'var(--pp-radius-xs)', color: 'var(--pp-ink)' }}>
+          {v}
+        </span>
+      ),
     },
     {
       title: 'Tên',
       dataIndex: 'name',
-      render: (v: string) => <Text strong>{v}</Text>,
+      render: (v: string) => <span style={{ fontWeight: 600, fontSize: 'var(--pp-text-sm)' }}>{v}</span>,
     },
     {
       title: 'Loại',
       dataIndex: 'groupType',
-      width: 140,
-      render: (v: string) =>
-        v === 'FREE_GROUP'
-          ? <Tag color="blue">🔢 FREE GROUP</Tag>
-          : <Tag color="purple">🧪 BATCH</Tag>,
+      width: 100,
+      render: (v: string) => <TypeTag type={v} />,
     },
     {
       title: 'Item Group',
       dataIndex: 'itemGroup',
       width: 130,
-      render: (v: any) => v ? <Tag>{v.key}</Tag> : <Text type="secondary">—</Text>,
+      render: (v: any) => v
+        ? <span style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-2)' }}>{v.key}</span>
+        : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
     },
     {
       title: 'Target WD / WE',
       width: 130,
       render: (_: any, r: ProductionGroup) =>
         r.groupType === 'FREE_GROUP'
-          ? <Text>{r.targetWeekday ?? '—'} / {r.targetWeekend ?? '—'}</Text>
-          : <Text type="secondary">—</Text>,
+          ? <span style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-sm)' }}>{r.targetWeekday ?? '—'} / {r.targetWeekend ?? '—'}</span>
+          : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
     },
     {
       title: 'Cối (g)',
       width: 100,
       render: (_: any, r: ProductionGroup) =>
         r.batchWeightGrams
-          ? <Text>{r.batchWeightGrams.toLocaleString('vi')}g</Text>
-          : <Text type="secondary">—</Text>,
+          ? <span style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-sm)' }}>{r.batchWeightGrams.toLocaleString('vi')}g</span>
+          : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
     },
     {
       title: 'Items',
-      width: 70,
+      width: 64,
       render: (_: any, r: ProductionGroup) => (
-        <Tag color="default">{r.items?.length ?? 0}</Tag>
+        <span className="pp-tab__badge">{r.items?.length ?? 0}</span>
       ),
     },
     {
       title: '',
-      width: 180,
+      width: 140,
       render: (_: any, r: ProductionGroup) => (
-        <Space size={4}>
-          <Tooltip title="Xem chi tiết">
-            <Button
-              size="small"
-              icon={expandedId === r.id ? <DownOutlined /> : <RightOutlined />}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <Tooltip title="Chi tiết">
+            <button
+              className="pp-btn pp-btn--icon"
               onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
-            />
+              aria-label="Toggle detail"
+            >
+              {expandedId === r.id ? <DownOutlined /> : <RightOutlined />}
+            </button>
           </Tooltip>
-          <Button
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => startEdit(r)}
-          >Sửa</Button>
+          <button className="pp-btn pp-btn--ghost" style={{ padding: '4px 10px', fontSize: 'var(--pp-text-xs)' }} onClick={() => startEdit(r)}>
+            <EditOutlined /> Sửa
+          </button>
           <Popconfirm
             title="Xóa production group này?"
             onConfirm={() => deleteMut.mutate(r.id)}
-            okText="Xóa"
-            cancelText="Huỷ"
+            okText="Xóa" cancelText="Huỷ"
           >
-            <Button size="small" danger icon={<DeleteOutlined />} />
+            <button className="pp-btn pp-btn--icon" aria-label="Delete" style={{ color: 'var(--pp-danger)' }}>
+              <DeleteOutlined />
+            </button>
           </Popconfirm>
-        </Space>
+        </div>
       ),
     },
   ];
 
-  // ── Expanded row detail ──────────────────────────────────────────────────────
+  // ── Expanded row ──────────────────────────────────────────────────────────────
   const expandedRowRender = (g: ProductionGroup) => {
     const items = g.items ?? [];
-    if (!items.length) return <Text type="secondary" style={{ padding: '8px 16px', display: 'block' }}>Chưa có sản phẩm nào trong group.</Text>;
+    if (!items.length)
+      return <div style={{ padding: '12px 16px', color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-sm)' }}>Chưa có sản phẩm nào trong group.</div>;
     return (
-      <div style={{ padding: '12px 32px', background: '#fafafa', borderRadius: 6 }}>
-        <div style={{ display: 'flex', gap: 32, flexWrap: 'wrap' }}>
-          {/* Info */}
-          <div>
-            <Text strong style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>Thông tin</Text>
-            <table style={{ marginTop: 6, fontSize: 13, borderCollapse: 'collapse' }}>
-              <tbody>
+      <div style={{ padding: '16px 24px', background: 'var(--pp-paper-2)', display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+        {/* Info */}
+        <div>
+          <div style={{ fontSize: 'var(--pp-text-xs)', fontWeight: 700, color: 'var(--pp-ink-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>Thông tin</div>
+          <table style={{ fontSize: 'var(--pp-text-sm)', borderCollapse: 'collapse' }}>
+            <tbody>
+              <tr>
+                <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Loại</td>
+                <td><TypeTag type={g.groupType} /></td>
+              </tr>
+              <tr>
+                <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Item Group</td>
+                <td style={{ fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)' }}>{g.itemGroup ? `${g.itemGroup.key} — ${g.itemGroup.name}` : '—'}</td>
+              </tr>
+              {g.groupType === 'BATCH_FORMULA' && g.batchWeightGrams && (
                 <tr>
-                  <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Loại</td>
-                  <td>{g.groupType === 'FREE_GROUP' ? <Tag color="blue">FREE GROUP</Tag> : <Tag color="purple">BATCH FORMULA</Tag>}</td>
+                  <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Trọng lượng cối</td>
+                  <td style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600 }}>{(g.batchWeightGrams / 1000).toFixed(1)} kg</td>
                 </tr>
+              )}
+              {g.groupType === 'FREE_GROUP' && (
+                <>
+                  <tr>
+                    <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Target WD</td>
+                    <td style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600 }}>{g.targetWeekday ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Target WE</td>
+                    <td style={{ fontFamily: 'var(--pp-font-mono)', fontWeight: 600 }}>{g.targetWeekend ?? '—'}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, paddingBottom: 6, fontSize: 'var(--pp-text-xs)' }}>Ngưỡng tồn</td>
+                    <td>
+                      {g.thresholdPercent != null
+                        ? <span className="pp-type-tag pp-type-tag--free">SX khi còn &lt;{g.thresholdPercent}%</span>
+                        : <span style={{ color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-xs)' }}>Luôn SX đủ target</span>}
+                    </td>
+                  </tr>
+                </>
+              )}
+              {g.note && (
                 <tr>
-                  <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Item Group</td>
-                  <td>{g.itemGroup ? `${g.itemGroup.key} — ${g.itemGroup.name}` : '—'}</td>
+                  <td style={{ color: 'var(--pp-ink-3)', paddingRight: 16, fontSize: 'var(--pp-text-xs)' }}>Ghi chú</td>
+                  <td style={{ fontSize: 'var(--pp-text-sm)' }}>{g.note}</td>
                 </tr>
-                {g.groupType === 'BATCH_FORMULA' && g.batchWeightGrams && (
-                  <tr>
-                    <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Trọng lượng cối</td>
-                    <td><Text strong>{(g.batchWeightGrams / 1000).toFixed(1)} kg</Text></td>
-                  </tr>
-                )}
-                {g.groupType === 'FREE_GROUP' && (
-                  <>
-                    <tr>
-                      <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Target WD</td>
-                      <td><Text strong>{g.targetWeekday ?? '—'}</Text></td>
-                    </tr>
-                    <tr>
-                      <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Target WE</td>
-                      <td><Text strong>{g.targetWeekend ?? '—'}</Text></td>
-                    </tr>
-                    <tr>
-                      <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Ngưỡng tồn</td>
-                      <td>
-                        {g.thresholdPercent != null
-                          ? <Tag color="gold">SX khi còn &lt;{g.thresholdPercent}%</Tag>
-                          : <Text type="secondary">Luôn SX đủ target</Text>}
-                      </td>
-                    </tr>
-                  </>
-                )}
-                {g.note && (
-                  <tr>
-                    <td style={{ color: '#94a3b8', paddingRight: 16, paddingBottom: 4 }}>Ghi chú</td>
-                    <td>{g.note}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {/* Items list */}
+        <div style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ fontSize: 'var(--pp-text-xs)', fontWeight: 700, color: 'var(--pp-ink-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            Sản phẩm ({items.length})
           </div>
-          {/* Items */}
-          <div style={{ flex: 1, minWidth: 260 }}>
-            <Text strong style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: 1 }}>
-              Sản phẩm ({items.length})
-            </Text>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', marginTop: 6 }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: 'left', padding: '4px 8px', background: '#f1f5f9', color: '#475569' }}>Sản phẩm</th>
+          <table style={{ width: '100%', fontSize: 'var(--pp-text-sm)', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left', padding: '6px 8px', background: 'var(--pp-paper-3)', color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sản phẩm</th>
+                {g.groupType === 'BATCH_FORMULA' && (
+                  <th style={{ textAlign: 'right', padding: '6px 8px', background: 'var(--pp-paper-3)', color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-xs)', fontWeight: 600 }}>Gram/cái</th>
+                )}
+                <th style={{ textAlign: 'center', padding: '6px 8px', background: 'var(--pp-paper-3)', color: 'var(--pp-ink-3)', fontSize: 'var(--pp-text-xs)', fontWeight: 600 }}>#</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((gi, idx) => (
+                <tr key={idx}>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--pp-rule)', fontWeight: 500 }}>
+                    {gi.item?.name ?? gi.item?.key ?? '?'}
+                  </td>
                   {g.groupType === 'BATCH_FORMULA' && (
-                    <th style={{ textAlign: 'right', padding: '4px 8px', background: '#f1f5f9', color: '#475569' }}>Gram/cái</th>
+                    <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--pp-rule)', textAlign: 'right', fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)' }}>
+                      {gi.gramsPerUnit != null ? `${gi.gramsPerUnit}g` : '—'}
+                    </td>
                   )}
-                  <th style={{ textAlign: 'center', padding: '4px 8px', background: '#f1f5f9', color: '#475569' }}>Sort</th>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid var(--pp-rule)', textAlign: 'center', fontFamily: 'var(--pp-font-mono)', fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-3)' }}>
+                    {gi.sortOrder}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {items.map((gi, idx) => (
-                  <tr key={idx}>
-                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9' }}>
-                      {gi.item?.name ?? gi.item?.key ?? '?'}
-                    </td>
-                    {g.groupType === 'BATCH_FORMULA' && (
-                      <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9', textAlign: 'right' }}>
-                        {gi.gramsPerUnit != null ? `${gi.gramsPerUnit}g` : '—'}
-                      </td>
-                    )}
-                    <td style={{ padding: '4px 8px', borderBottom: '1px solid #f1f5f9', textAlign: 'center', color: '#94a3b8' }}>
-                      {gi.sortOrder}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
   };
 
-  const isPending = createMut.isPending || updateMut.isPending;
-
-  // ── Render ───────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <ToolOutlined style={{ fontSize: 22, color: '#D2691E' }} />
-        <div>
-          <Title level={4} style={{ margin: 0 }}>Production Groups</Title>
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            Quản lý nhóm sản xuất — FREE GROUP (phân bổ nội bộ) hoặc BATCH FORMULA (theo cối)
-          </Text>
+      {/* Form section */}
+      <div className="pp-form-section" style={{ marginBottom: 'var(--pp-space-md)' }}>
+        <div className="pp-form-section__head">
+          <span className="pp-form-section__label">
+            {editingId ? <><EditOutlined /> Chỉnh sửa Production Group</> : <><PlusOutlined /> Tạo Production Group</>}
+          </span>
+          {editingId && (
+            <button className="pp-btn pp-btn--ghost" style={{ padding: '4px 12px', fontSize: 'var(--pp-text-xs)' }} onClick={resetForm}>
+              Huỷ
+            </button>
+          )}
+        </div>
+        <div className="pp-form-section__body">
+          <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ groupType: 'FREE_GROUP' }}>
+            <Row gutter={16}>
+              <Col xs={24} md={6}>
+                <Form.Item name="code" label="Code" rules={[{ required: true, message: 'Bắt buộc' }]}>
+                  <Input placeholder="VD: BANH_BAP" disabled={!!editingId} style={{ fontFamily: 'var(--pp-font-mono)' }} />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={8}>
+                <Form.Item name="name" label="Tên" rules={[{ required: true, message: 'Bắt buộc' }]}>
+                  <Input placeholder="VD: Nhóm Bánh Bắp" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={5}>
+                <Form.Item name="groupType" label="Loại" rules={[{ required: true }]}>
+                  <Select onChange={(v) => setGroupType(v)}>
+                    <Select.Option value="FREE_GROUP">FREE GROUP</Select.Option>
+                    <Select.Option value="BATCH_FORMULA">BATCH FORMULA</Select.Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={5}>
+                <Form.Item name="itemGroupId" label="Item Group">
+                  <Select placeholder="-- Không có --" allowClear
+                    options={itemGroups.map((g: any) => ({ label: `${g.code} — ${g.name}`, value: g.id }))}
+                  />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {groupType === 'FREE_GROUP' && (
+              <Row gutter={16}>
+                <Col xs={24} md={6}>
+                  <Form.Item name="targetWeekday" label="Target Weekday">
+                    <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 40" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item name="targetWeekend" label="Target Weekend">
+                    <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 50" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={6}>
+                  <Form.Item
+                    name="thresholdPercent"
+                    label={<span>Ngưỡng tồn % <span style={{ fontSize: 'var(--pp-text-xs)', color: 'var(--pp-ink-3)' }}>(tuỳ chọn)</span></span>}
+                  >
+                    <InputNumber style={{ width: '100%' }} min={1} max={100} placeholder="VD: 50" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
+
+            {groupType === 'BATCH_FORMULA' && (
+              <Row gutter={16}>
+                <Col xs={24} md={8}>
+                  <Form.Item name="batchWeightGrams" label="Trọng lượng cối (gram)">
+                    <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 10000" />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
+
+            <Form.Item name="note" label="Ghi chú">
+              <Input.TextArea rows={2} placeholder="Ghi chú tuỳ chọn..." />
+            </Form.Item>
+
+            {/* Items editor */}
+            <div style={{ marginBottom: 'var(--pp-space-xs)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: isBatch ? '1fr 130px 90px 36px' : '1fr 90px 36px', gap: 8, padding: '0 4px', marginBottom: 6 }}>
+                <span style={{ fontSize: 'var(--pp-text-xs)', fontWeight: 700, color: 'var(--pp-ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sản phẩm</span>
+                {isBatch && <span style={{ fontSize: 'var(--pp-text-xs)', fontWeight: 700, color: 'var(--pp-ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gram/cái</span>}
+                <span style={{ fontSize: 'var(--pp-text-xs)', fontWeight: 700, color: 'var(--pp-ink-3)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sort</span>
+                <div />
+              </div>
+
+              {groupItems.map((item) => (
+                <div key={item.key} style={{ display: 'grid', gridTemplateColumns: isBatch ? '1fr 130px 90px 36px' : '1fr 90px 36px', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+                  <Select
+                    showSearch
+                    placeholder="-- Chọn sản phẩm --"
+                    value={item.itemId || undefined}
+                    onChange={(v) => updateItem(item.key, 'itemId', v)}
+                    optionFilterProp="label"
+                    options={products.map((p: any) => ({ label: `${p.code} — ${p.name}`, value: p.id }))}
+                  />
+                  {isBatch && (
+                    <InputNumber
+                      placeholder="gram/cái"
+                      min={0} step={0.01}
+                      style={{ width: '100%' }}
+                      value={item.gramsPerUnit ?? undefined}
+                      onChange={(v) => updateItem(item.key, 'gramsPerUnit', v)}
+                    />
+                  )}
+                  <InputNumber
+                    min={1}
+                    value={item.sortOrder}
+                    onChange={(v) => updateItem(item.key, 'sortOrder', v ?? 1)}
+                    style={{ width: '100%' }}
+                  />
+                  <button className="pp-btn pp-btn--icon" style={{ color: 'var(--pp-danger)' }} onClick={() => removeItem(item.key)} type="button">
+                    <DeleteOutlined />
+                  </button>
+                </div>
+              ))}
+
+              <button type="button" className="pp-btn pp-btn--ghost" style={{ marginTop: 4, fontSize: 'var(--pp-text-sm)' }} onClick={addItem}>
+                <PlusOutlined /> Thêm item
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 'var(--pp-space-sm)' }}>
+              {editingId && <button type="button" className="pp-btn pp-btn--ghost" onClick={resetForm}>Huỷ</button>}
+              <button
+                type="submit"
+                className="pp-btn pp-btn--primary"
+                disabled={isPending}
+                aria-disabled={isPending}
+              >
+                {isPending ? <Spin size="small" /> : null}
+                {editingId ? 'Lưu thay đổi' : 'Tạo group'}
+              </button>
+            </div>
+          </Form>
         </div>
       </div>
 
-      {/* ── FORM CARD ── */}
-      <Card
-        title={editingId ? '✏️ Sửa Production Group' : '➕ Tạo Production Group'}
-        style={{ marginBottom: 20 }}
-        extra={editingId && (
-          <Button size="small" onClick={resetForm}>Huỷ chỉnh sửa</Button>
-        )}
-      >
-        <Form form={form} layout="vertical" onFinish={handleFinish}
-          initialValues={{ groupType: 'FREE_GROUP' }}>
-          <Row gutter={16}>
-            <Col xs={24} md={6}>
-              <Form.Item name="code" label="Code" rules={[{ required: true, message: 'Bắt buộc' }]}>
-                <Input placeholder="VD: BANH_BAP" disabled={!!editingId} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="name" label="Tên" rules={[{ required: true, message: 'Bắt buộc' }]}>
-                <Input placeholder="VD: Nhóm Bánh Bắp" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={5}>
-              <Form.Item name="groupType" label="Loại" rules={[{ required: true }]}>
-                <Select onChange={(v) => setGroupType(v)}>
-                  <Select.Option value="FREE_GROUP">🔢 FREE_GROUP</Select.Option>
-                  <Select.Option value="BATCH_FORMULA">🧪 BATCH_FORMULA</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={5}>
-              <Form.Item name="itemGroupId" label="Item Group">
-                <Select placeholder="-- Không có --" allowClear
-                  options={itemGroups.map((g: any) => ({ label: `${g.code} — ${g.name}`, value: g.id }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {/* FREE_GROUP fields */}
-          {groupType === 'FREE_GROUP' && (
-            <Row gutter={16}>
-              <Col xs={24} md={6}>
-                <Form.Item name="targetWeekday" label="Target Weekday">
-                  <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 40" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={6}>
-                <Form.Item name="targetWeekend" label="Target Weekend">
-                  <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 50" />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={6}>
-                <Form.Item
-                  name="thresholdPercent"
-                  label={<span>Ngưỡng tồn % <Text type="secondary" style={{ fontSize: 11 }}>(tuỳ chọn)</Text></span>}
-                >
-                  <InputNumber style={{ width: '100%' }} min={1} max={100} placeholder="VD: 50 → SX khi còn <50%" />
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-
-          {/* BATCH_FORMULA fields */}
-          {groupType === 'BATCH_FORMULA' && (
-            <Row gutter={16}>
-              <Col xs={24} md={8}>
-                <Form.Item name="batchWeightGrams" label="Trọng lượng cối (gram)">
-                  <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 10000" />
-                </Form.Item>
-              </Col>
-            </Row>
-          )}
-
-          <Form.Item name="note" label="Ghi chú">
-            <Input.TextArea rows={2} placeholder="Ghi chú tuỳ chọn..." />
-          </Form.Item>
-
-          {/* Items editor */}
-          {/* <Divider orientation="left" style={{ fontSize: 13, color: '#475569' }}>
-            Items trong group
-          </Divider> */}
-
-          {/* Header */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isBatch ? '1fr 130px 90px 36px' : '1fr 90px 36px',
-            gap: 8, padding: '0 4px', marginBottom: 4,
-          }}>
-            <Text style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Sản phẩm</Text>
-            {isBatch && <Text style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Gram/cái</Text>}
-            <Text style={{ fontSize: 11, fontWeight: 600, color: '#64748b' }}>Sort</Text>
-            <div />
-          </div>
-
-          {groupItems.map((item) => (
-            <div key={item.key} style={{
-              display: 'grid',
-              gridTemplateColumns: isBatch ? '1fr 130px 90px 36px' : '1fr 90px 36px',
-              gap: 8, marginBottom: 6, alignItems: 'center',
-            }}>
-              <Select
-                showSearch
-                placeholder="-- Chọn sản phẩm --"
-                value={item.itemId || undefined}
-                onChange={(v) => updateItem(item.key, 'itemId', v)}
-                optionFilterProp="label"
-                options={products.map((p: any) => ({ label: `${p.code} — ${p.name}`, value: p.id }))}
-              />
-              {isBatch && (
-                <InputNumber
-                  placeholder="gram/cái"
-                  min={0}
-                  step={0.01}
-                  style={{ width: '100%' }}
-                  value={item.gramsPerUnit ?? undefined}
-                  onChange={(v) => updateItem(item.key, 'gramsPerUnit', v)}
-                />
-              )}
-              <InputNumber
-                min={1}
-                value={item.sortOrder}
-                onChange={(v) => updateItem(item.key, 'sortOrder', v ?? 1)}
-                style={{ width: '100%' }}
-              />
-              <Button
-                type="text" danger size="small" icon={<DeleteOutlined />}
-                onClick={() => removeItem(item.key)}
-              />
-            </div>
-          ))}
-
-          <Button type="dashed" icon={<PlusOutlined />} onClick={addItem} style={{ marginBottom: 16 }}>
-            Thêm item
-          </Button>
-
-          {/* Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-            {editingId && <Button onClick={resetForm}>Huỷ</Button>}
-            <Button type="primary" htmlType="submit" loading={isPending}>
-              {editingId ? 'Lưu thay đổi' : 'Tạo group'}
-            </Button>
-          </div>
-        </Form>
-      </Card>
-
-      {/* ── LIST CARD ── */}
-      <Card title="📋 Danh sách Production Groups">
-        <Table
-          dataSource={groups}
-          columns={columns}
-          rowKey="id"
-          loading={isLoading}
-          pagination={false}
-          size="small"
-          bordered
-          locale={{ emptyText: 'Chưa có production group nào' }}
-          expandable={{
-            expandedRowKeys: expandedId ? [expandedId] : [],
-            showExpandColumn: false,
-            expandedRowRender,
-          }}
-        />
-      </Card>
+      {/* List table */}
+      <div className="pp-card">
+        <div className="pp-card__header">
+          <span className="pp-card__title">Danh sách Production Groups</span>
+          <span className="pp-tab__badge">{groups.length}</span>
+        </div>
+        <div className="pp-table-wrap">
+          <Table
+            dataSource={groups}
+            columns={columns}
+            rowKey="id"
+            loading={isLoading}
+            pagination={false}
+            size="small"
+            locale={{ emptyText: 'Chưa có production group nào' }}
+            expandable={{
+              expandedRowKeys: expandedId ? [expandedId] : [],
+              showExpandColumn: false,
+              expandedRowRender,
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 };
 
-// ── Page Wrapper with Tabs ─────────────────────────────────────────────────────
+// ── Tab definitions ─────────────────────────────────────────────────────────────
+interface TabDef {
+  key: string;
+  icon: React.ReactNode;
+  label: string;
+  component: React.ReactNode;
+}
+
+// ── Page Wrapper ───────────────────────────────────────────────────────────────
 const ProductionGroupsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('daily-plan');
 
-  const tabItems = [
+  const tabs: TabDef[] = [
     {
       key: 'daily-plan',
-      label: (
-        <span>
-          <CalendarOutlined /> Kế hoạch ngày
-        </span>
-      ),
-      children: <DailyPlanTab />,
+      icon: <CalendarOutlined />,
+      label: 'Kế hoạch ngày',
+      component: <DailyPlanTab />,
     },
     {
       key: 'config',
-      label: (
-        <span>
-          <AppstoreOutlined /> Cấu hình SX
-        </span>
+      icon: <AppstoreOutlined />,
+      label: 'Cấu hình SX',
+      component: (
+        <ProductionConfigTab
+          onNavigateToGroup={() => setActiveTab('groups')}
+          onNavigateToRule={() => setActiveTab('threshold-rules')}
+        />
       ),
-      children: <ProductionConfigTab 
-        onNavigateToGroup={() => setActiveTab('groups')} 
-        onNavigateToRule={() => setActiveTab('threshold-rules')} 
-      />,
     },
     {
       key: 'groups',
-      label: (
-        <span>
-          <ToolOutlined /> Production Groups
-        </span>
-      ),
-      children: <ProductionGroups />,
+      icon: <ToolOutlined />,
+      label: 'Production Groups',
+      component: <ProductionGroups />,
     },
     {
       key: 'threshold-rules',
-      label: (
-        <span>
-          <SettingOutlined /> Threshold Rules
-        </span>
-      ),
-      children: <ThresholdRulesTab />,
+      icon: <ThunderboltOutlined />,
+      label: 'Threshold Rules',
+      component: <ThresholdRulesTab />,
     },
   ];
 
+  const activeTabDef = tabs.find((t) => t.key === activeTab);
+
   return (
-    <div style={{ padding: '0 4px' }}>
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={tabItems}
-        size="large"
-        style={{ marginBottom: 0 }}
-      />
+    <div className="pp-page">
+      {/* ── Page header ── */}
+      <div className="pp-header">
+        <div className="pp-header__left">
+          <div className="pp-header__icon">
+            <SettingOutlined />
+          </div>
+          <div>
+            <h1 className="pp-header__title">Kế hoạch Sản xuất</h1>
+            <p className="pp-header__sub">Quản lý nhóm SX, threshold rules và kế hoạch hàng ngày</p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 'var(--pp-space-md)' }}>
+          <Tooltip title="Làm mới dữ liệu">
+            <button className="pp-btn pp-btn--ghost" style={{ fontSize: 'var(--pp-text-sm)' }} aria-label="Refresh">
+              <ReloadOutlined />
+            </button>
+          </Tooltip>
+        </div>
+      </div>
+
+      {/* ── Tab bar ── */}
+      <nav className="pp-tabs" role="tablist" aria-label="Production tabs">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            aria-controls={`pp-panel-${tab.key}`}
+            id={`pp-tab-${tab.key}`}
+            className={`pp-tab${activeTab === tab.key ? ' pp-tab--active' : ''}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            <span className="pp-tab__icon">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {/* ── Tab panel ── */}
+      <main
+        id={`pp-panel-${activeTab}`}
+        role="tabpanel"
+        aria-labelledby={`pp-tab-${activeTab}`}
+        className="pp-content"
+      >
+        {activeTabDef?.component}
+      </main>
     </div>
   );
 };

@@ -18,3 +18,6 @@ export { default as thresholdRuleService } from './thresholdRuleService';
 export { default as posSaleService } from './posSaleService';
 export { default as dailyReportService } from './dailyReportService';
 export { default as deliveryRecordService } from './deliveryRecordService';
+export { default as supplierService } from './supplierService';
+export { default as productMappingService } from './productMappingService';
+export { default as prodAdjustmentService } from './prodAdjustmentService';

@@ -44,168 +44,78 @@ interface BreadcrumbMap {
 const breadcrumbNameMap: BreadcrumbMap = {
   '/': 'Tổng Quan',
   '/products': 'Danh Sách Sản Phẩm',
-  '/products/create': 'Thêm Hàng Hoá Mới',
-  '/products/edit': 'Chỉnh Sửa Hàng Hoá',
-  '/products/recipes': 'Công Thức',
-  '/products/cost-price': 'Giá Cost',
-  '/production/plans': 'Kế Hoạch Sản Xuất',
-  '/production/requests': 'Lệnh Sản Xuất',
-  '/production/requests/create': 'Tạo Lệnh Sản Xuất',
-  '/production/requests/edit': 'Chỉnh Sửa Lệnh Sản Xuất',
-  '/production/delivery': 'Giao Nhận Bếp → Shop',
-  '/warehouse': 'Kho',
-  '/warehouse/main': 'Kho Tổng',
-  '/warehouse/kitchen': 'Kho Bếp',
-  '/warehouse/store': 'Cửa Hàng',
-  '/warehouse/bakery': 'Kho Bánh (Legacy)',
-  '/warehouse/goods-transfer': 'Luân Chuyển Kho',
-  '/warehouse/inventory-adjustment': 'Phiếu Thất Thoát',
-  '/warehouse/product-orders': 'Quản Lý Đơn Hàng',
+  '/products/create': 'Tạo Sản Phẩm',
+  '/suppliers': 'Nhà Cung Cấp',
+  '/product-mapping': 'Product Mapping',
+  '/item-groups': 'Item Groups',
+  '/sx-config': 'Cấu Hình Sản Xuất',
+  '/prod-groups': 'Production Groups',
+  '/threshold-rules': 'Threshold Rules',
+  '/prod-plans': 'Kế Hoạch Ngày',
+  '/prod-requests': 'Phiếu Sản Xuất',
+  '/delivery': 'Giao Nhận Bếp → Shop',
+  '/prod-adjustments': 'Điều Chỉnh Sản Xuất',
+  '/stock-summary': 'Tồn Kho',
+  '/inventory-requests': 'Phiếu Kho',
   '/reports/daily': 'Báo Cáo Ngày',
+  '/reports/huy-banh': 'Hủy Bánh',
   '/reports/pos-sales': 'POS Sales',
-  '/settings': 'Cài Đặt',
-  '/settings/user-roles': 'User Roles',
-  '/settings/user-profiles': 'User Profiles',
 };
 
 type MenuItem = Required<MenuProps>['items'][number];
 
-// --- Warehouse sub-items (filtered by mockRole) ---
+// --- Menu items strictly matching dev-ui.html ---
 
-/** Tất cả các trang kho — SUPER_ADMIN thấy hết */
-const ALL_WAREHOUSE_ITEMS: MenuItem[] = [
+const DEV_UI_MENU_ITEMS: MenuItem[] = [
   {
-    key: '/warehouse/main',
-    icon: <HomeOutlined />,
-    label: 'Kho Tổng',
-  },
-  {
-    key: '/warehouse/kitchen',
-    icon: <FireOutlined />,
-    label: 'Kho Bếp',
-  },
-  {
-    key: '/warehouse/store',
-    icon: <ShopOutlined />,
-    label: 'Cửa Hàng',
-  },
-];
-
-/** Map: mockRole → danh sách key được phép */
-const WAREHOUSE_ROLE_ACCESS: Record<MockRole, string[]> = {
-  SUPER_ADMIN: ['/warehouse/main', '/warehouse/kitchen', '/warehouse/store'],
-  ADMIN_KHO: ['/warehouse/main'],
-  ADMIN_BEP: ['/warehouse/kitchen'],
-  NV_CUA_HANG: ['/warehouse/store'],
-};
-
-/** Lọc danh sách trang kho theo mockRole */
-function getWarehouseItems(mockRole?: MockRole): MenuItem[] {
-  if (!mockRole) return ALL_WAREHOUSE_ITEMS; // fallback: hiện tất cả
-  const allowed = WAREHOUSE_ROLE_ACCESS[mockRole];
-  return ALL_WAREHOUSE_ITEMS.filter((item) => allowed.includes(item!.key as string));
-}
-
-// --- Static menu items (không phụ thuộc role) ---
-
-const STATIC_MENU_ITEMS_BEFORE: MenuItem[] = [
-  {
-    key: '/',
-    icon: <DashboardOutlined />,
-    label: 'Tổng Quan',
-  },
-  {
-    key: 'products',
-    icon: <ShoppingOutlined />,
-    label: 'Sản Phẩm',
+    type: 'group',
+    label: 'Master Data',
     children: [
-      {
-        key: '/products',
-        icon: <UnorderedListOutlined />,
-        label: 'Danh Sách Sản Phẩm',
-      },
-      {
-        key: '/products/groups',
-        icon: <UnorderedListOutlined />,
-        label: 'Item Groups',
-      },
-      {
-        key: '/products/recipes',
-        icon: <ExperimentOutlined />,
-        label: 'Công Thức',
-      },
-      {
-        key: '/products/cost-price',
-        icon: <DollarOutlined />,
-        label: 'Giá Cost',
-      },
+      { key: '/products', label: '📋 Sản phẩm' },
+      { key: '/products/create', label: '➕ Tạo sản phẩm' },
+      { key: '/suppliers', label: '🏭 Nhà cung cấp' },
+      { key: '/product-mapping', label: '🔗 Product Mapping' },
+      { key: '/item-groups', label: '🏠 Item Groups' },
     ],
   },
   {
-    key: 'production',
-    icon: <ToolOutlined />,
-    label: 'Sản Xuất',
+    type: 'group',
+    label: 'Kế hoạch SX',
     children: [
-      {
-        key: '/production/plans',
-        icon: <ScheduleOutlined />,
-        label: 'Kế Hoạch Sản Xuất',
-      },
-      {
-        key: '/production/requests',
-        icon: <OrderedListOutlined />,
-        label: 'Lệnh Sản Xuất',
-      },
-      {
-        key: '/production/delivery',
-        icon: <SwapOutlined />,
-        label: 'Giao Nhận',
-      },
+      { key: '/sx-config', label: '📋 Cấu hình SX' },
+      { key: '/prod-groups', label: '🔧 Prod Groups' },
+      { key: '/threshold-rules', label: '📏 Threshold Rules' },
+      { key: '/prod-plans', label: '📅 Kế hoạch ngày' },
+    ],
+  },
+  {
+    type: 'group',
+    label: 'Sản xuất',
+    children: [
+      { key: '/prod-requests', label: '📝 Phiếu SX' },
+      { key: '/delivery', label: '🚚 Giao nhận' },
+      { key: '/prod-adjustments', label: '⚠️ Điều chỉnh SX' },
+    ],
+  },
+  {
+    type: 'group',
+    label: 'Kho',
+    children: [
+      { key: '/stock-summary', label: '📦 Tồn kho' },
+      { key: '/inventory-requests', label: '📋 Phiếu kho' },
+    ],
+  },
+  {
+    type: 'group',
+    label: 'Báo cáo',
+    children: [
+      { key: '/reports/daily', label: '📊 Báo cáo ngày' },
+      { key: '/reports/huy-banh', label: '🗑 Hủy bánh' },
+      { key: '/reports/pos-sales', label: '🏪 POS Sales' },
     ],
   },
 ];
 
-const STATIC_MENU_ITEMS_AFTER: MenuItem[] = [
-  {
-    key: '/warehouse/product-orders',
-    icon: <OrderedListOutlined />,
-    label: 'Quản Lý Đơn Hàng',
-  },
-  {
-    key: 'reports',
-    icon: <BarChartOutlined />,
-    label: 'Báo Cáo',
-    children: [
-      {
-        key: '/reports/daily',
-        icon: <FileTextOutlined />,
-        label: 'Báo Cáo Ngày',
-      },
-      {
-        key: '/reports/pos-sales',
-        icon: <ShoppingCartOutlined />,
-        label: 'POS Sales',
-      },
-    ],
-  },
-  {
-    key: 'settings',
-    icon: <SettingOutlined />,
-    label: 'Cài Đặt',
-    children: [
-      {
-        key: '/settings/user-roles',
-        icon: <TeamOutlined />,
-        label: 'User Roles',
-      },
-      {
-        key: '/settings/user-profiles',
-        icon: <UserSwitchOutlined />,
-        label: 'User Profiles',
-      },
-    ],
-  },
-];
 
 // --- Role label mapping ---
 
@@ -352,22 +262,6 @@ const MainLayout: React.FC = () => {
     ? (ROLE_LABELS[user.mockRole] || user.mockRole)
     : (user?.role ? (ROLE_LABELS[user.role] || user.role) : 'Quản trị viên');
 
-  // Build menu items căn cứ theo mockRole của user
-  const dynamicMenuItems: MenuItem[] = useMemo(() => {
-    const warehouseChildren = getWarehouseItems(user?.mockRole);
-    const warehouseMenu: MenuItem = {
-      key: 'warehouse',
-      icon: <DatabaseOutlined />,
-      label: 'Kho',
-      children: warehouseChildren,
-    };
-    return [
-      ...STATIC_MENU_ITEMS_BEFORE,
-      warehouseMenu,
-      ...STATIC_MENU_ITEMS_AFTER,
-    ];
-  }, [user?.mockRole]);
-
   return (
     <Layout style={{ minHeight: '100vh' }}>
       {/* --- Sidebar --- */}
@@ -392,10 +286,10 @@ const MainLayout: React.FC = () => {
         {/* Logo */}
         <div
           className={`sidebar-logo ${collapsed ? 'collapsed' : ''}`}
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/products')}
         >
-          <span className="sidebar-logo-icon">🍞</span>
-          {!collapsed && <span className="sidebar-logo-text">BakeryMS</span>}
+          <span className="sidebar-logo-icon">🥐</span>
+          {!collapsed && <span className="sidebar-logo-text">Bakery Dev</span>}
         </div>
 
         {/* Navigation Menu */}
@@ -406,7 +300,7 @@ const MainLayout: React.FC = () => {
           selectedKeys={selectedKeys}
           openKeys={openKeys}
           onOpenChange={setOpenKeys}
-          items={dynamicMenuItems}
+          items={DEV_UI_MENU_ITEMS}
           onClick={onMenuClick}
         />
 
