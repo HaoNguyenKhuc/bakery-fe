@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   Card, Button, DatePicker, Table, Typography, Space,
   Tag, InputNumber, message, Alert, Tooltip, Badge, Row, Col,
@@ -12,9 +12,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
-import productionRequestService from '../../../api/services/productionRequestService';
 import deliveryRecordService from '../../../api/services/deliveryRecordService';
-import type { DeliveryItem } from '../../../types/deliveryRecord';
+import type { DeliveryRecordResponse } from '../../../types/deliveryRecord';
 
 const { Title, Text } = Typography;
 
@@ -22,19 +21,19 @@ const { Title, Text } = Typography;
 
 const STATUS_COLOR: Record<string, string> = {
   CONFIRMED: 'success',
-  PENDING: 'warning',
+  READY: 'warning',
   DISCREPANCY: 'error',
 };
 
 const STATUS_LABEL: Record<string, string> = {
   CONFIRMED: 'Đã xác nhận',
-  PENDING: 'Chờ xác nhận',
+  READY: 'Chờ xác nhận',
   DISCREPANCY: 'Chênh lệch',
 };
 
 const STATUS_ICON: Record<string, React.ReactNode> = {
   CONFIRMED: <CheckCircleOutlined />,
-  PENDING: <ClockCircleOutlined />,
+  READY: <ClockCircleOutlined />,
   DISCREPANCY: <WarningOutlined />,
 };
 
@@ -44,7 +43,7 @@ const KitchenDelivery: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [date, setDate] = useState<Dayjs>(dayjs());
-  // Map lineId → { qty, note } for pending confirmations
+  // Map id → { qty, note } for pending confirmations
   const [inputMap, setInputMap] = useState<
     Record<string, { qty: number | null; note: string }>
   >({});
@@ -52,16 +51,11 @@ const KitchenDelivery: React.FC = () => {
 
   const dateStr = date.format('YYYY-MM-DD');
 
-  // ── Fetch production requests for the day ──────────────────────────────────
+  // ── Fetch delivery records for the day ─────────────────────────────────────
 
-  const { data: requests = [], isLoading, refetch } = useQuery({
-    queryKey: ['production-requests-delivery', dateStr],
-    queryFn: () =>
-      productionRequestService.list({
-        productionDate: dateStr,
-        approvalStatus: 'APPROVED',
-        size: 100,
-      }),
+  const { data: deliveryItems = [], isLoading, refetch } = useQuery({
+    queryKey: ['delivery-records', dateStr],
+    queryFn: () => deliveryRecordService.getList(dateStr),
     select: (raw: any) => {
       // Handle both array and paginated response
       const items = Array.isArray(raw) ? raw : raw?.content ?? raw?.data ?? [];
@@ -69,25 +63,8 @@ const KitchenDelivery: React.FC = () => {
     },
   });
 
-  // ── Flatten all delivery items from all requests ───────────────────────────
-
-  const deliveryItems: DeliveryItem[] = useMemo(() => {
-    return (requests as any[]).flatMap((req: any) =>
-      (req.lines ?? [])
-        .filter((line: any) => !!line.deliveryRecord)
-        .map((line: any) => ({
-          lineId: line.id,
-          requestCode: req.code ?? '',
-          productName: line.product?.name ?? '—',
-          productCode: line.product?.key ?? '',
-          plannedQty: line.plannedQty ?? 0,
-          deliveryRecord: line.deliveryRecord,
-        })),
-    );
-  }, [requests]);
-
   const confirmedCount = deliveryItems.filter(
-    (i) => i.deliveryRecord.deliveryStatus === 'CONFIRMED',
+    (i: DeliveryRecordResponse) => i.deliveryStatus === 'CONFIRMED',
   ).length;
   const pendingCount = deliveryItems.length - confirmedCount;
 
@@ -107,7 +84,7 @@ const KitchenDelivery: React.FC = () => {
       message.success('Xác nhận giao nhận thành công!');
       setConfirmModalId(null);
       queryClient.invalidateQueries({
-        queryKey: ['production-requests-delivery', dateStr],
+        queryKey: ['delivery-records', dateStr],
       });
     },
     onError: () => {
@@ -122,20 +99,20 @@ const KitchenDelivery: React.FC = () => {
     [],
   );
 
-  const handleConfirmClick = (item: DeliveryItem) => {
-    const qty = inputMap[item.lineId]?.qty;
+  const handleConfirmClick = (item: DeliveryRecordResponse) => {
+    const qty = inputMap[item.id]?.qty;
     if (qty === null || qty === undefined) {
       message.warning('Vui lòng nhập số lượng shop nhận');
       return;
     }
-    setConfirmModalId(item.lineId);
+    setConfirmModalId(item.id);
   };
 
-  const handleConfirmOk = (item: DeliveryItem) => {
-    const entry = inputMap[item.lineId];
+  const handleConfirmOk = (item: DeliveryRecordResponse) => {
+    const entry = inputMap[item.id];
     if (!entry || entry.qty === null) return;
     confirmMutation.mutate({
-      deliveryId: item.deliveryRecord.id,
+      deliveryId: item.id,
       qtyReceived: entry.qty,
       note: entry.note || undefined,
     });
@@ -143,7 +120,7 @@ const KitchenDelivery: React.FC = () => {
 
   // ── Table columns ───────────────────────────────────────────────────────────
 
-  const columns: ColumnsType<DeliveryItem> = [
+  const columns: ColumnsType<DeliveryRecordResponse> = [
     {
       title: 'Sản phẩm',
       key: 'product',
@@ -158,18 +135,12 @@ const KitchenDelivery: React.FC = () => {
       ),
     },
     {
-      title: 'Phiếu SX',
-      dataIndex: 'requestCode',
-      width: 160,
-      render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text>,
-    },
-    {
       title: 'Bếp làm',
       key: 'qtyProduced',
       align: 'right',
       width: 90,
       render: (_, row) => (
-        <Text strong>{row.deliveryRecord.qtyProduced}</Text>
+        <Text strong>{row.qtyProduced}</Text>
       ),
     },
     {
@@ -178,22 +149,22 @@ const KitchenDelivery: React.FC = () => {
       align: 'right',
       width: 130,
       render: (_, row) => {
-        if (row.deliveryRecord.deliveryStatus === 'CONFIRMED') {
-          return <Text strong>{row.deliveryRecord.qtyReceived}</Text>;
+        if (row.deliveryStatus === 'CONFIRMED') {
+          return <Text strong>{row.qtyReceived}</Text>;
         }
         return (
           <InputNumber
             min={0}
-            max={row.deliveryRecord.qtyProduced * 2}
-            value={inputMap[row.lineId]?.qty ?? null}
+            max={row.qtyProduced * 2}
+            value={inputMap[row.id]?.qty ?? row.qtyProduced} // Default to qtyProduced if undefined
             placeholder="0"
             style={{ width: 90 }}
             onChange={(v) =>
               setInputMap((prev) => ({
                 ...prev,
-                [row.lineId]: {
+                [row.id]: {
                   qty: v,
-                  note: prev[row.lineId]?.note ?? '',
+                  note: prev[row.id]?.note ?? '',
                 },
               }))
             }
@@ -207,8 +178,8 @@ const KitchenDelivery: React.FC = () => {
       align: 'center',
       width: 100,
       render: (_, row) => {
-        if (row.deliveryRecord.deliveryStatus !== 'CONFIRMED') return '—';
-        const diff = row.deliveryRecord.discrepancy;
+        if (row.deliveryStatus !== 'CONFIRMED') return '—';
+        const diff = row.discrepancy || 0;
         if (diff === 0) return <Tag color="success">0</Tag>;
         return (
           <Tag color={diff < 0 ? 'error' : 'warning'}>
@@ -224,7 +195,7 @@ const KitchenDelivery: React.FC = () => {
       width: 130,
       align: 'center',
       render: (_, row) => {
-        const s = row.deliveryRecord.deliveryStatus;
+        const s = row.deliveryStatus;
         return (
           <Tag
             icon={STATUS_ICON[s]}
@@ -241,9 +212,9 @@ const KitchenDelivery: React.FC = () => {
       width: 110,
       align: 'center',
       render: (_, row) =>
-        row.deliveryRecord.confirmedAt ? (
+        row.confirmedAt ? (
           <Text style={{ fontSize: 12 }}>
-            {dayjs(row.deliveryRecord.confirmedAt).format('HH:mm:ss')}
+            {dayjs(row.confirmedAt).format('HH:mm:ss')}
           </Text>
         ) : (
           '—'
@@ -254,23 +225,32 @@ const KitchenDelivery: React.FC = () => {
       key: 'action',
       width: 110,
       render: (_, row) => {
-        if (row.deliveryRecord.deliveryStatus === 'CONFIRMED') return null;
+        if (row.deliveryStatus === 'CONFIRMED') return null;
+        
+        // Ensure default map entry exists if clicking Confirm without typing
+        const currentQty = inputMap[row.id]?.qty !== undefined ? inputMap[row.id]?.qty : row.qtyProduced;
+        
         return (
           <>
             <Button
               type="primary"
               size="small"
-              onClick={() => handleConfirmClick(row)}
+              onClick={() => {
+                if (inputMap[row.id] === undefined) {
+                  setInputMap(prev => ({...prev, [row.id]: { qty: row.qtyProduced, note: '' }}));
+                }
+                setConfirmModalId(row.id);
+              }}
               loading={
                 confirmMutation.isPending &&
-                confirmModalId === row.lineId
+                confirmModalId === row.id
               }
             >
               Xác nhận
             </Button>
 
             {/* Confirm modal */}
-            {confirmModalId === row.lineId && (
+            {confirmModalId === row.id && (
               <Modal
                 open
                 title="Xác nhận giao nhận"
@@ -288,16 +268,15 @@ const KitchenDelivery: React.FC = () => {
                   </div>
                   <div>
                     <Text>Bếp làm: </Text>
-                    <Text strong>{row.deliveryRecord.qtyProduced}</Text>
+                    <Text strong>{row.qtyProduced}</Text>
                   </div>
                   <div>
                     <Text>Shop nhận: </Text>
                     <Text strong style={{ color: '#1677ff' }}>
-                      {inputMap[row.lineId]?.qty ?? 0}
+                      {currentQty ?? 0}
                     </Text>
                   </div>
-                  {(inputMap[row.lineId]?.qty ?? 0) !==
-                    row.deliveryRecord.qtyProduced && (
+                  {(currentQty ?? 0) !== row.qtyProduced && (
                     <Alert
                       type="warning"
                       message="Số lượng không khớp với bếp — sẽ ghi nhận chênh lệch."
@@ -307,12 +286,12 @@ const KitchenDelivery: React.FC = () => {
                   <div>
                     <Text type="secondary">Ghi chú (tuỳ chọn):</Text>
                     <Input
-                      value={inputMap[row.lineId]?.note ?? ''}
+                      value={inputMap[row.id]?.note ?? ''}
                       onChange={(e) =>
                         setInputMap((prev) => ({
                           ...prev,
-                          [row.lineId]: {
-                            ...prev[row.lineId],
+                          [row.id]: {
+                            ...prev[row.id],
                             note: e.target.value,
                           },
                         }))
@@ -354,6 +333,7 @@ const KitchenDelivery: React.FC = () => {
                 onChange={(d) => d && setDate(d)}
                 format="DD/MM/YYYY"
                 style={{ width: 150 }}
+                allowClear={false}
               />
               <Tooltip title="Hôm sau">
                 <Button
@@ -388,15 +368,15 @@ const KitchenDelivery: React.FC = () => {
         </Row>
 
         {/* ─── Table ────────────────────────────────────────────────── */}
-        <Table<DeliveryItem>
+        <Table<DeliveryRecordResponse>
           dataSource={deliveryItems}
           columns={columns}
-          rowKey="lineId"
+          rowKey="id"
           loading={isLoading}
           pagination={false}
           size="middle"
           rowClassName={(row) =>
-            row.deliveryRecord.deliveryStatus === 'CONFIRMED'
+            row.deliveryStatus === 'CONFIRMED'
               ? 'ant-table-row-confirmed'
               : ''
           }

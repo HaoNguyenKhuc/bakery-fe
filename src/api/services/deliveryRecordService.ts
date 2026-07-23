@@ -10,6 +10,14 @@ import type { DeliveryRecordResponse } from '../../types/deliveryRecord';
  */
 const deliveryRecordService = {
   /**
+   * Lấy danh sách giao nhận trong ngày.
+   * @param date Ngày dạng YYYY-MM-DD
+   */
+  getList: (date: string) =>
+    axiosClient.get<DeliveryRecordResponse[], DeliveryRecordResponse[]>(`/api/v1/delivery-records`, {
+      params: { date },
+    }),
+  /**
    * Shop xác nhận số lượng đã nhận từ bếp.
    * @param id          UUID của delivery record (từ ProductionRequestLine.deliveryRecord.id)
    * @param qtyReceived Số lượng thực tế shop nhận được
