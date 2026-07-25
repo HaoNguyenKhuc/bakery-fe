@@ -113,11 +113,11 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* --- Sidebar Styles --- */
+/* --- Sidebar Styles (matching dev-ui.html) --- */
 .sidebar {
-  background: var(--sidebar-bg) !important;
+  background: #1e293b !important;
   border-right: none !important;
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
   position: relative;
   z-index: 10;
 }
@@ -131,34 +131,32 @@ body {
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 10px;
+  padding: 16px 14px 12px;
+  border-bottom: 1px solid #334155;
   cursor: pointer;
   transition: all var(--transition-normal);
   overflow: hidden;
   white-space: nowrap;
-  min-height: 64px;
+  min-height: 52px;
 }
 
 .sidebar-logo:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: #334155;
 }
 
 .sidebar-logo-icon {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1;
   flex-shrink: 0;
 }
 
 .sidebar-logo-text {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: 0.5px;
+  color: #f1f5f9;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   opacity: 1;
   transition: opacity var(--transition-fast), width var(--transition-fast);
 }
@@ -169,58 +167,80 @@ body {
   overflow: hidden;
 }
 
-/* Sidebar Menu */
-.sidebar-menu {
+/* Custom Nav (replacing AntD Menu) */
+.sidebar-nav {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 8px 0;
-  border-inline-end: none !important;
+  padding-bottom: 20px;
 }
 
-.sidebar-menu .ant-menu-item,
-.sidebar-menu .ant-menu-submenu-title {
-  margin: 2px 8px !important;
-  border-radius: var(--radius-md) !important;
-  color: var(--sidebar-text) !important;
-  transition: all var(--transition-fast) !important;
-  height: 44px !important;
-  line-height: 44px !important;
+.sidebar-nav-group {
+  padding: 4px 0;
+  border-top: 1px solid #334155;
 }
 
-.sidebar-menu .ant-menu-item:hover,
-.sidebar-menu .ant-menu-submenu-title:hover {
-  color: var(--color-text-inverse) !important;
-  background: var(--sidebar-menu-hover) !important;
+.sidebar-nav-group:first-child {
+  border-top: none;
 }
 
-.sidebar-menu .ant-menu-item-selected {
-  background: var(--sidebar-menu-active) !important;
-  color: var(--sidebar-text-active) !important;
+.sidebar-nav-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 8px 14px 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 20px;
+  cursor: pointer;
+  color: #94a3b8;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+
+.sidebar-nav-item:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+
+.sidebar-nav-item.active {
+  background: #0f172a;
+  color: #38bdf8;
+  border-left-color: #38bdf8;
   font-weight: 600;
 }
 
-.sidebar-menu .ant-menu-item-selected::after {
+/* Collapsed sidebar state */
+.sidebar.ant-layout-sider-collapsed .sidebar-nav-label {
   display: none;
 }
 
-.sidebar-menu .ant-menu-sub {
-  background: transparent !important;
+.sidebar.ant-layout-sider-collapsed .sidebar-nav-item {
+  padding: 12px 0;
+  justify-content: center;
+  border-left: 3px solid transparent;
 }
 
-.sidebar-menu .ant-menu-sub .ant-menu-item {
-  padding-left: 52px !important;
-  font-size: 13px;
-  height: 38px !important;
-  line-height: 38px !important;
+.sidebar.ant-layout-sider-collapsed .sidebar-nav-item.active {
+  border-left-color: #38bdf8;
 }
 
-.sidebar-menu .ant-menu-submenu-arrow {
-  color: var(--sidebar-text) !important;
-}
-
-.sidebar-menu .ant-menu-submenu-open>.ant-menu-submenu-title {
-  color: var(--color-text-inverse) !important;
+.sidebar.ant-layout-sider-collapsed .sidebar-nav-item-text {
+  display: none;
 }
 
 /* --- Header Styles --- */

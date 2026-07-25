@@ -32,6 +32,7 @@ import {
 import { useAuthStore, useAppStore, selectSidebarCollapsed, selectUnreadCount } from '../../store';
 import { useWarehouseStore } from '../../store';
 import { authService } from '../../api/services/authService';
+import { roleService } from '../../api/services/roleService';
 import type { MockRole } from '../../types';
 
 const { Sider, Header, Content } = Layout;
@@ -88,7 +89,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Master Data',
     items: [
       { key: '/products',        label: '📋 Sản phẩm',      screenCode: 'ITEMS' },
-      { key: '/products/create', label: '➕ Tạo sản phẩm',  screenCode: 'ITEMS' },
       { key: '/suppliers',       label: '🏭 Nhà cung cấp',  screenCode: 'SUPPLIERS' },
       { key: '/product-mapping', label: '🔗 Product Mapping', screenCode: 'PRODUCT_MAPPING' },
       { key: '/item-groups',     label: '🏠 Item Groups',   screenCode: 'ITEM_GROUPS' },
@@ -136,31 +136,6 @@ const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Build Ant Design menu items, filtering by permission map */
-function buildFilteredMenuItems(
-  groups: NavGroup[],
-  canViewScreen: (code: string) => boolean,
-  isSuperAdmin: boolean,
-): MenuItem[] {
-  const result: MenuItem[] = [];
-  for (const group of groups) {
-    const visibleItems = group.items.filter((item) => {
-      if (item.screenCode === null) return isSuperAdmin;
-      return canViewScreen(item.screenCode);
-    });
-    if (visibleItems.length === 0) continue;
-    result.push({
-      type: 'group',
-      label: group.label,
-      children: visibleItems.map((item) => ({
-        key: item.key,
-        label: item.label,
-      })),
-    });
-  }
-  return result;
-}
-
 
 // --- Role label mapping ---
 
@@ -188,6 +163,16 @@ const MainLayout: React.FC = () => {
   const isSuperAdminFn = useAuthStore((s) => s.isSuperAdmin);
   const permissionMap = useAuthStore((s) => s.permissionMap);
   const roleCode = useAuthStore((s) => s.roleCode);
+  const roleId = useAuthStore((s) => s.roleId);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const setPermissionMap = useAuthStore((s) => s.setPermissionMap);
+
+  // Re-fetch permission map if needed (e.g. after page refresh)
+  useEffect(() => {
+    if (isAuthenticated && roleId && roleCode && roleCode.toUpperCase() !== 'SUPER_ADMIN' && permissionMap === null) {
+      roleService.getPermissions(roleId).then(setPermissionMap).catch(() => {});
+    }
+  }, [isAuthenticated, roleId, roleCode, permissionMap, setPermissionMap]);
 
   // Fetch all warehouses once when layout mounts (user is authenticated)
   const fetchWarehouses = useWarehouseStore((s) => s.fetchWarehouses);
@@ -197,33 +182,6 @@ const MainLayout: React.FC = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Determine selected key and open submenu keys from current path
-  const selectedKeys = useMemo(() => {
-    const { pathname } = location;
-    return [pathname];
-  }, [location]);
-
-  const getOpenKeyFromPath = (pathname: string): string[] => {
-    if (pathname.startsWith('/products')) return ['products'];
-    if (pathname.startsWith('/production')) return ['production'];
-    if (pathname.startsWith('/warehouse')) return ['warehouse'];
-    if (pathname.startsWith('/reports')) return ['reports'];
-    if (pathname.startsWith('/settings')) return ['settings'];
-    return [];
-  };
-
-  const [openKeys, setOpenKeys] = useState<string[]>(() =>
-    getOpenKeyFromPath(location.pathname)
-  );
-
-  useEffect(() => {
-    const keys = getOpenKeyFromPath(location.pathname);
-    if (keys.length > 0) {
-      setOpenKeys((prev) => Array.from(new Set([...prev, ...keys])));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
 
   // Build breadcrumb items from path
   const breadcrumbItems = useMemo(() => {
@@ -313,12 +271,17 @@ const MainLayout: React.FC = () => {
       ? (ROLE_LABELS[user.mockRole] || user.mockRole)
       : (user?.role ? (ROLE_LABELS[user.role] || user.role) : 'Quản trị viên'));
 
-  // Build filtered menu items based on permission map
-  const filteredMenuItems = useMemo(
-    () => buildFilteredMenuItems(NAV_GROUPS, canViewScreen, isSuperAdminFn()),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [permissionMap, roleCode],
-  );
+  // Build filtered nav groups based on permission map
+  const filteredNavGroups = useMemo(() => {
+    const isSuper = isSuperAdminFn();
+    return NAV_GROUPS.map((group) => {
+      const visibleItems = group.items.filter((item) => {
+        if (item.screenCode === null) return isSuper;
+        return canViewScreen(item.screenCode);
+      });
+      return { ...group, items: visibleItems };
+    }).filter((group) => group.items.length > 0);
+  }, [permissionMap, roleCode, canViewScreen, isSuperAdminFn]);
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -328,7 +291,7 @@ const MainLayout: React.FC = () => {
         collapsible
         collapsed={collapsed}
         onCollapse={toggleSidebar}
-        width={260}
+        width={240}
         collapsedWidth={80}
         trigger={null}
         breakpoint="lg"
@@ -350,17 +313,27 @@ const MainLayout: React.FC = () => {
           {!collapsed && <span className="sidebar-logo-text">Bakery Dev</span>}
         </div>
 
-        {/* Navigation Menu */}
-        <Menu
-          className="sidebar-menu"
-          theme="dark"
-          mode="inline"
-          selectedKeys={selectedKeys}
-          openKeys={openKeys}
-          onOpenChange={setOpenKeys}
-          items={filteredMenuItems}
-          onClick={onMenuClick}
-        />
+        {/* Custom Navigation Menu matching dev-ui.html */}
+        <nav className="sidebar-nav">
+          {filteredNavGroups.map((group) => (
+            <div key={group.label} className="sidebar-nav-group">
+              <div className="sidebar-nav-label">{group.label}</div>
+              {group.items.map((item) => {
+                const isActive = location.pathname.startsWith(item.key) && (item.key !== '/' || location.pathname === '/');
+                return (
+                  <div
+                    key={item.key}
+                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                    onClick={() => navigate(item.key)}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    <span className="sidebar-nav-item-text">{item.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
 
         {/* Sidebar Footer */}
         {!collapsed && (
