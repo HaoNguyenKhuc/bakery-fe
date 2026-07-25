@@ -66,7 +66,7 @@ export type CommandStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type CommandAction  = 'CREATE' | 'UPDATE' | 'DELETE';
 
 // ─────────────────────────────────────────────
-// AUTH (placeholder — API coming next sprint)
+// AUTH (legacy types — kept for backward compat)
 // ─────────────────────────────────────────────
 
 export type UserRole = 'ADMIN' | 'STAFF';
@@ -119,16 +119,123 @@ export interface User {
   mockRole?: MockRole;
 }
 
+// ─────────────────────────────────────────────
+// AUTH — Real API contract (POST /api/v1/auth/login)
+// ─────────────────────────────────────────────
+
+/** Response trả về từ POST /api/v1/auth/login */
+export interface LoginResponse {
+  userId: string;        // UUID
+  username: string;
+  fullName: string;
+  roleId: string;        // UUID của role
+  roleCode: string;      // "SUPER_ADMIN" | "KITCHEN" | ...
+  roleName: string;
+  accessToken: string;
+  refreshToken: string;
+  // expiresIn không có trong response → dùng DEFAULT_EXPIRES_IN = 3600s
+}
+
 export interface LoginRequest {
   username: string;
   password: string;
 }
 
-export interface LoginResponse {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;           // seconds
+// ─────────────────────────────────────────────
+// USER ACCOUNTS — /api/v1/user-accounts
+// ─────────────────────────────────────────────
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  fullName: string | null;
+  roleId: string | null;
+  roleCode: string | null;
+  roleName: string | null;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface CreateUserRequest {
+  username: string;
+  fullName?: string | null;
+  roleId?: string | null;
+  password: string;
+}
+
+export interface UpdateUserRequest {
+  username: string;
+  fullName?: string | null;
+  roleId?: string | null;
+  password?: string | null; // null = giữ nguyên mật khẩu cũ
+}
+
+// ─────────────────────────────────────────────
+// ROLES — /api/v1/user-roles
+// ─────────────────────────────────────────────
+
+export interface Role {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+}
+
+export interface CreateRoleRequest {
+  code: string;
+  name: string;
+  description?: string | null;
+}
+
+// ─────────────────────────────────────────────
+// SCREENS & PERMISSIONS — /api/v1/screens
+// ─────────────────────────────────────────────
+
+export type ActionCode =
+  | 'VIEW' | 'CREATE' | 'UPDATE' | 'DELETE'
+  | 'APPROVE' | 'REJECT' | 'FINALIZE' | 'HISTORY';
+
+export interface Screen {
+  code: string;                   // "ITEMS", "USERS", "ROLES", ...
+  name: string;                   // "Sản phẩm", "Tài khoản", ...
+  availableActions: ActionCode[];
+  sortOrder: number;
+}
+
+/**
+ * Permission map — response từ GET /api/v1/user-roles/{id}/permissions
+ * null  = SUPER_ADMIN (hiển thị và được phép làm tất cả)
+ * map   = { "ITEMS": ["VIEW","CREATE"], "ROLES": ["VIEW"] }
+ */
+export type PermissionMap = Record<string, ActionCode[]> | null;
+
+/** Body gửi lên PUT /api/v1/user-roles/{id}/permissions */
+export interface SavePermissionsRequest {
+  permissions: Array<{ screenCode: string; actionCode: ActionCode }>;
+}
+
+// ─────────────────────────────────────────────
+// ACTIVITY LOG — /api/v1/activity-log
+// ─────────────────────────────────────────────
+
+export interface ActivityLogEntry {
+  id: string;
+  createdAt: string;    // ISO datetime
+  actorName: string;
+  action: string;       // "CREATE" | "UPDATE" | "DELETE" | "APPROVE" | ...
+  entityName: string;   // "Item" | "DailyReport" | ...
+  entityLabel: string;  // Tên cụ thể của đối tượng
+  note: string | null;
+}
+
+export interface ActivityLogParams {
+  page?: number;
+  size?: number;
+  actorName?: string;
+  action?: string;
+  entityName?: string;
+  entityLabel?: string;
+  from?: string;        // ISO datetime string
+  to?: string;
 }
 
 // ─────────────────────────────────────────────

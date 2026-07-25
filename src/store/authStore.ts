@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { User, UserRole, WarehouseRole, ScreenPermission } from '../types';
+import type { User, UserRole, WarehouseRole, ScreenPermission, LoginResponse, PermissionMap } from '../types';
 
-// --- Permission Constants ---
+// --- Permission Constants (legacy — kept for backward compat) ---
 
 /** All available permission strings in the system */
 export const PERMISSIONS = {
@@ -26,7 +26,7 @@ export const PERMISSIONS = {
   SETTINGS_MANAGE: 'settings:manage',
 } as const;
 
-/** Default permissions per role */
+/** Default permissions per role (legacy) */
 const DEFAULT_ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ADMIN: Object.values(PERMISSIONS),
   STAFF: [
@@ -48,13 +48,19 @@ interface AuthState {
   isAuthenticated: boolean;
   tokenExpiresAt: number | null; // unix timestamp in ms
 
+  // Real API fields (from LoginResponse)
+  roleCode: string | null;       // "SUPER_ADMIN" | "KITCHEN" | ...
+  roleId: string | null;         // UUID của role
+  permissionMap: PermissionMap;  // null = SUPER_ADMIN (show all)
+
   // Actions
-  setAuth: (user: User, accessToken: string, refreshToken: string, expiresIn: number) => void;
+  setAuth: (data: LoginResponse, expiresIn?: number) => void;
   setAccessToken: (accessToken: string, expiresIn: number) => void;
+  setPermissionMap: (map: PermissionMap) => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
 
-  // Selectors / Helpers
+  // Selectors / Helpers (legacy)
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
   hasRole: (role: UserRole) => boolean;
@@ -70,7 +76,28 @@ interface AuthState {
   isWarehouseRole: (role: WarehouseRole) => boolean;
   /** Kiểm tra user có phải ADMIN không */
   isAdmin: () => boolean;
+
+  // New role-based helpers
+  /** Kiểm tra user có phải SUPER_ADMIN (bỏ qua toàn bộ phân quyền) */
+  isSuperAdmin: () => boolean;
+  /**
+   * Kiểm tra user có quyền VIEW màn hình screenCode không.
+   * - permissionMap === null (SUPER_ADMIN) → true
+   * - permissionMap[screenCode]?.includes('VIEW') → true
+   * - Ngược lại → false
+   */
+  canViewScreen: (screenCode: string) => boolean;
+  /**
+   * Kiểm tra user có quyền action cụ thể trên màn hình screenCode không.
+   * - permissionMap === null (SUPER_ADMIN) → true
+   * - permissionMap[screenCode]?.includes(action) → true
+   * - Ngược lại → false
+   */
+  canDoOnScreen: (screenCode: string, action: string) => boolean;
 }
+
+/** Mặc định token hết hạn sau 1 giờ (backend không trả expiresIn) */
+const DEFAULT_EXPIRES_IN = 3600;
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -81,23 +108,47 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
       tokenExpiresAt: null,
+      roleCode: null,
+      roleId: null,
+      permissionMap: null,
 
       // --- Actions ---
 
-      setAuth: (user, accessToken, refreshToken, expiresIn) => {
+      /**
+       * Gọi sau khi login thành công.
+       * Nhận LoginResponse từ /api/v1/auth/login và lưu vào store.
+       * expiresIn mặc định 3600s (1 giờ) vì backend không trả về field này.
+       */
+      setAuth: (data: LoginResponse, expiresIn = DEFAULT_EXPIRES_IN) => {
         const expiresAt = Date.now() + expiresIn * 1000;
+        // Build backward-compat User object
+        const user: User = {
+          id: data.userId,
+          username: data.username,
+          fullName: data.fullName,
+          role: data.roleCode === 'SUPER_ADMIN' ? 'ADMIN' : 'STAFF',
+          permissions: data.roleCode === 'SUPER_ADMIN' ? ['*'] : [],
+        };
         set({
           user,
-          accessToken,
-          refreshToken,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
           isAuthenticated: true,
           tokenExpiresAt: expiresAt,
+          roleCode: data.roleCode,
+          roleId: data.roleId,
+          // permissionMap sẽ được set riêng bởi loadAndApplySidebarPermissions
         });
       },
 
       setAccessToken: (accessToken, expiresIn) => {
         const expiresAt = Date.now() + expiresIn * 1000;
         set({ accessToken, tokenExpiresAt: expiresAt });
+      },
+
+      /** Lưu permission map sau khi fetch từ /api/v1/user-roles/{id}/permissions */
+      setPermissionMap: (map: PermissionMap) => {
+        set({ permissionMap: map });
       },
 
       logout: () => {
@@ -107,6 +158,9 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           isAuthenticated: false,
           tokenExpiresAt: null,
+          roleCode: null,
+          roleId: null,
+          permissionMap: null,
         });
       },
 
@@ -115,12 +169,12 @@ export const useAuthStore = create<AuthState>()(
           user: state.user ? { ...state.user, ...updates } : null,
         })),
 
-      // --- Helpers ---
+      // --- Legacy Helpers ---
 
       hasPermission: (permission) => {
         const { user } = get();
         if (!user) return false;
-        if (user.role === 'admin') return true; // Admin has all permissions
+        if (user.role === 'admin') return true;
         return user.permissions.includes(permission);
       },
 
@@ -180,6 +234,25 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get();
         return user?.role === 'ADMIN';
       },
+
+      // ── New Role-based Helpers ─────────────────────────────────────────────
+
+      isSuperAdmin: () => {
+        const { roleCode } = get();
+        return roleCode?.toUpperCase() === 'SUPER_ADMIN';
+      },
+
+      canViewScreen: (screenCode: string) => {
+        const { permissionMap } = get();
+        if (permissionMap === null) return true; // SUPER_ADMIN: xem tất cả
+        return permissionMap[screenCode]?.includes('VIEW') ?? false;
+      },
+
+      canDoOnScreen: (screenCode: string, action: string) => {
+        const { permissionMap } = get();
+        if (permissionMap === null) return true; // SUPER_ADMIN: làm tất cả
+        return permissionMap[screenCode]?.includes(action as never) ?? false;
+      },
     }),
     {
       name: 'bakery-auth',
@@ -191,6 +264,9 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
         tokenExpiresAt: state.tokenExpiresAt,
+        roleCode: state.roleCode,
+        roleId: state.roleId,
+        permissionMap: state.permissionMap,
       }),
     }
   )

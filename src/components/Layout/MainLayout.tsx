@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import { useAuthStore, useAppStore, selectSidebarCollapsed, selectUnreadCount } from '../../store';
 import { useWarehouseStore } from '../../store';
+import { authService } from '../../api/services/authService';
 import type { MockRole } from '../../types';
 
 const { Sider, Header, Content } = Layout;
@@ -60,61 +61,105 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/reports/daily': 'Báo Cáo Ngày',
   '/reports/huy-banh': 'Hủy Bánh',
   '/reports/pos-sales': 'POS Sales',
+  '/users': 'Tài Khoản Người Dùng',
+  '/roles': 'Phân Quyền (Roles)',
+  '/activity-log': 'Nhật Ký Hoạt Động',
 };
 
 type MenuItem = Required<MenuProps>['items'][number];
 
 // --- Menu items strictly matching dev-ui.html ---
 
-const DEV_UI_MENU_ITEMS: MenuItem[] = [
+// --- Nav config with screenCode for permission filtering ---
+
+interface NavItem {
+  key: string;           // route path
+  label: string;
+  screenCode: string | null; // null = chỉ SUPER_ADMIN mới thấy
+}
+
+interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
   {
-    type: 'group',
     label: 'Master Data',
-    children: [
-      { key: '/products', label: '📋 Sản phẩm' },
-      { key: '/products/create', label: '➕ Tạo sản phẩm' },
-      { key: '/suppliers', label: '🏭 Nhà cung cấp' },
-      { key: '/product-mapping', label: '🔗 Product Mapping' },
-      { key: '/item-groups', label: '🏠 Item Groups' },
+    items: [
+      { key: '/products',        label: '📋 Sản phẩm',      screenCode: 'ITEMS' },
+      { key: '/products/create', label: '➕ Tạo sản phẩm',  screenCode: 'ITEMS' },
+      { key: '/suppliers',       label: '🏭 Nhà cung cấp',  screenCode: 'SUPPLIERS' },
+      { key: '/product-mapping', label: '🔗 Product Mapping', screenCode: 'PRODUCT_MAPPING' },
+      { key: '/item-groups',     label: '🏠 Item Groups',   screenCode: 'ITEM_GROUPS' },
     ],
   },
   {
-    type: 'group',
     label: 'Kế hoạch SX',
-    children: [
-      { key: '/sx-config', label: '📋 Cấu hình SX' },
-      { key: '/prod-groups', label: '🔧 Prod Groups' },
-      { key: '/threshold-rules', label: '📏 Threshold Rules' },
-      { key: '/prod-plans', label: '📅 Kế hoạch ngày' },
+    items: [
+      { key: '/sx-config',        label: '📋 Cấu hình SX',    screenCode: 'SX_CONFIG' },
+      { key: '/prod-groups',      label: '🔧 Prod Groups',     screenCode: 'PROD_GROUPS' },
+      { key: '/threshold-rules',  label: '📏 Threshold Rules', screenCode: 'THRESHOLD_RULES' },
+      { key: '/prod-plans',       label: '📅 Kế hoạch ngày',  screenCode: 'PROD_PLANS' },
     ],
   },
   {
-    type: 'group',
     label: 'Sản xuất',
-    children: [
-      { key: '/prod-requests', label: '📝 Phiếu SX' },
-      { key: '/delivery', label: '🚚 Giao nhận' },
-      { key: '/prod-adjustments', label: '⚠️ Điều chỉnh SX' },
+    items: [
+      { key: '/prod-requests',   label: '📝 Phiếu SX',       screenCode: 'PROD_REQUESTS' },
+      { key: '/delivery',        label: '🚚 Giao nhận',       screenCode: 'DELIVERY_RECORDS' },
+      { key: '/prod-adjustments', label: '⚠️ Điều chỉnh SX', screenCode: 'PROD_ADJUSTMENTS' },
     ],
   },
   {
-    type: 'group',
     label: 'Kho',
-    children: [
-      { key: '/stock-summary', label: '📦 Tồn kho' },
-      { key: '/inventory-requests', label: '📋 Phiếu kho' },
+    items: [
+      { key: '/stock-summary',      label: '📦 Tồn kho',  screenCode: 'STOCK_SUMMARY' },
+      { key: '/inventory-requests', label: '📋 Phiếu kho', screenCode: 'INVENTORY_REQUESTS' },
     ],
   },
   {
-    type: 'group',
     label: 'Báo cáo',
-    children: [
-      { key: '/reports/daily', label: '📊 Báo cáo ngày' },
-      { key: '/reports/huy-banh', label: '🗑 Hủy bánh' },
-      { key: '/reports/pos-sales', label: '🏪 POS Sales' },
+    items: [
+      { key: '/reports/daily',     label: '📊 Báo cáo ngày', screenCode: 'DAILY_REPORT' },
+      { key: '/reports/huy-banh',  label: '🗑 Hủy bánh',    screenCode: 'HUY_BANH' },
+      { key: '/reports/pos-sales', label: '🏪 POS Sales',   screenCode: 'POS_SALES' },
+    ],
+  },
+  {
+    label: 'Hệ thống',
+    items: [
+      { key: '/users',        label: '👤 Tài khoản',          screenCode: 'USERS' },
+      { key: '/roles',        label: '🔐 Phân quyền',         screenCode: 'ROLES' },
+      { key: '/activity-log', label: '📜 Nhật ký hoạt động', screenCode: null }, // chỉ SUPER_ADMIN
     ],
   },
 ];
+
+/** Build Ant Design menu items, filtering by permission map */
+function buildFilteredMenuItems(
+  groups: NavGroup[],
+  canViewScreen: (code: string) => boolean,
+  isSuperAdmin: boolean,
+): MenuItem[] {
+  const result: MenuItem[] = [];
+  for (const group of groups) {
+    const visibleItems = group.items.filter((item) => {
+      if (item.screenCode === null) return isSuperAdmin;
+      return canViewScreen(item.screenCode);
+    });
+    if (visibleItems.length === 0) continue;
+    result.push({
+      type: 'group',
+      label: group.label,
+      children: visibleItems.map((item) => ({
+        key: item.key,
+        label: item.label,
+      })),
+    });
+  }
+  return result;
+}
 
 
 // --- Role label mapping ---
@@ -139,6 +184,10 @@ const MainLayout: React.FC = () => {
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const canViewScreen = useAuthStore((s) => s.canViewScreen);
+  const isSuperAdminFn = useAuthStore((s) => s.isSuperAdmin);
+  const permissionMap = useAuthStore((s) => s.permissionMap);
+  const roleCode = useAuthStore((s) => s.roleCode);
 
   // Fetch all warehouses once when layout mounts (user is authenticated)
   const fetchWarehouses = useWarehouseStore((s) => s.fetchWarehouses);
@@ -225,8 +274,9 @@ const MainLayout: React.FC = () => {
   };
 
   // Handle user dropdown click
-  const onUserMenuClick: MenuProps['onClick'] = ({ key }) => {
+  const onUserMenuClick: MenuProps['onClick'] = async ({ key }) => {
     if (key === 'logout') {
+      await authService.logout(); // fire-and-forget, không block UI
       logout();
       navigate('/login');
     } else if (key === 'profile') {
@@ -257,10 +307,18 @@ const MainLayout: React.FC = () => {
 
   // Derive display name and role from store
   const displayName = user?.fullName || user?.username || 'Admin';
-  // Ƭu tiên hiển thị mockRole (nếu có) rồi mới đến role thật
-  const displayRole = user?.mockRole
-    ? (ROLE_LABELS[user.mockRole] || user.mockRole)
-    : (user?.role ? (ROLE_LABELS[user.role] || user.role) : 'Quản trị viên');
+  const displayRole = roleCode
+    ? (ROLE_LABELS[roleCode] || roleCode)
+    : (user?.mockRole
+      ? (ROLE_LABELS[user.mockRole] || user.mockRole)
+      : (user?.role ? (ROLE_LABELS[user.role] || user.role) : 'Quản trị viên'));
+
+  // Build filtered menu items based on permission map
+  const filteredMenuItems = useMemo(
+    () => buildFilteredMenuItems(NAV_GROUPS, canViewScreen, isSuperAdminFn()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [permissionMap, roleCode],
+  );
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
@@ -300,7 +358,7 @@ const MainLayout: React.FC = () => {
           selectedKeys={selectedKeys}
           openKeys={openKeys}
           onOpenChange={setOpenKeys}
-          items={DEV_UI_MENU_ITEMS}
+          items={filteredMenuItems}
           onClick={onMenuClick}
         />
 

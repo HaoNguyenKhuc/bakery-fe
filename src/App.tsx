@@ -38,6 +38,11 @@ const DailyReport = React.lazy(() => import('./pages/Reports/DailyReport'));
 const HuyBanh = React.lazy(() => import('./pages/Reports/HuyBanh'));
 const POSSales = React.lazy(() => import('./pages/Reports/POSSales'));
 
+// Hệ thống
+const Users = React.lazy(() => import('./pages/System/Users'));
+const Roles = React.lazy(() => import('./pages/System/Roles'));
+const ActivityLog = React.lazy(() => import('./pages/System/ActivityLog'));
+
 // ── Suspense wrapper ───────────────────────────────────────────────────────────
 
 const PageLoading: React.FC = () => (
@@ -107,6 +112,11 @@ const App: React.FC = () => {
         <Route path="reports/daily" element={<Lazy><DailyReport /></Lazy>} />
         <Route path="reports/huy-banh" element={<Lazy><HuyBanh /></Lazy>} />
         <Route path="reports/pos-sales" element={<Lazy><POSSales /></Lazy>} />
+
+        {/* ── Hệ thống ── */}
+        <Route path="users"        element={<Lazy><Users /></Lazy>} />
+        <Route path="roles"        element={<Lazy><Roles /></Lazy>} />
+        <Route path="activity-log" element={<Lazy><ActivityLog /></Lazy>} />
 
         {/* Catch-all: redirect unknown paths to products */}
         <Route path="*" element={<Navigate to="/products" replace />} />

@@ -11,11 +11,13 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { useAuthStore } from '../../../store/authStore';
-import type { LoginRequest, User, UserRole, MockRole } from '../../../types';
+import { authService } from '../../../api/services/authService';
+import { roleService } from '../../../api/services/roleService';
+import type { LoginRequest, LoginResponse, User, UserRole, MockRole } from '../../../types';
 
 const { Title, Text, Paragraph } = Typography;
 
-// ─── Dev-mode preset accounts ─────────────────────────────────────────────────
+// ─── Dev-mode preset accounts (chỉ dùng khi import.meta.env.DEV) ─────────────
 
 interface DevAccount {
   mockRole: MockRole;
@@ -27,7 +29,7 @@ interface DevAccount {
   color: string;
   description: string;
   permissions: string[];
-  warehouseAccess: string;  // Mô tả trang kho được phép vào
+  warehouseAccess: string;
 }
 
 const DEV_ACCOUNTS: DevAccount[] = [
@@ -37,7 +39,7 @@ const DEV_ACCOUNTS: DevAccount[] = [
     label: 'Super Admin',
     icon: <CrownOutlined />,
     color: '#722ed1',
-    username: 'superadmin',
+    username: 'admin',
     password: '123456',
     description: 'Toàn quyền hệ thống, duyệt lệnh, quản lý master data',
     warehouseAccess: 'Kho Tổng • Kho Bếp • Cửa Hàng',
@@ -81,26 +83,28 @@ const DEV_ACCOUNTS: DevAccount[] = [
   },
 ];
 
-// ─── API call (will 404 until backend Auth sprint) ────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async function callLoginApi(data: LoginRequest): Promise<{
-  user: User; accessToken: string; refreshToken: string; expiresIn: number;
-}> {
-  const res = await fetch(
-    `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'}/auth/login`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    },
-  );
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message || `HTTP ${res.status}`);
+/**
+ * Sau khi login thành công, load và lưu permission map vào store.
+ * - SUPER_ADMIN → permissionMap = null (hiển thị tất cả)
+ * - Role khác   → fetch /api/v1/user-roles/{roleId}/permissions
+ */
+async function loadAndApplySidebarPermissions(
+  roleCode: string,
+  roleId: string,
+  setPermissionMap: (map: import('../../../types').PermissionMap) => void,
+) {
+  if (roleCode.toUpperCase() === 'SUPER_ADMIN') {
+    setPermissionMap(null); // null = SUPER_ADMIN = hiển thị tất cả
+  } else {
+    try {
+      const map = await roleService.getPermissions(roleId);
+      setPermissionMap(map);
+    } catch {
+      setPermissionMap({}); // fallback: không có quyền nào
+    }
   }
-  return res.json() as Promise<{
-    user: User; accessToken: string; refreshToken: string; expiresIn: number;
-  }>;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -108,29 +112,33 @@ async function callLoginApi(data: LoginRequest): Promise<{
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { setAuth } = useAuthStore();
+  const { setAuth, setPermissionMap } = useAuthStore();
   const [form] = Form.useForm<LoginRequest>();
   const [apiError, setApiError] = useState<string | null>(null);
   const [devMode, setDevMode] = useState(false);
   const [selectedDev, setSelectedDev] = useState<DevAccount>(DEV_ACCOUNTS[0]);
 
-  // Redirect back to the page user tried to visit, or dashboard
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/';
+  // Redirect back to the page user tried to visit, or products
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/products';
 
   // ── Real API login ─────────────────────────────────────────────────────────
 
   const loginMutation = useMutation({
-    mutationFn: (data: LoginRequest) => callLoginApi(data),
-    onSuccess: ({ user, accessToken, refreshToken, expiresIn }) => {
-      setAuth(user, accessToken, refreshToken, expiresIn);
+    mutationFn: (data: LoginRequest) => authService.login(data.username, data.password),
+    onSuccess: async (data: LoginResponse) => {
+      // 1. Lưu auth info vào store
+      setAuth(data);
+      // 2. Fetch và apply permission map dựa trên role
+      await loadAndApplySidebarPermissions(data.roleCode, data.roleId, setPermissionMap);
+      // 3. Redirect
       navigate(from, { replace: true });
     },
     onError: (err: Error) => {
-      setApiError(err.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      setApiError(err.message || 'Sai username hoặc mật khẩu. Vui lòng thử lại.');
     },
   });
 
-  // ── Dev mode login (bypass API) ────────────────────────────────────────────
+  // ── Dev mode login (bypass API — chỉ trong môi trường development) ─────────
 
   const handleDevLogin = () => {
     const fakeUser: User = {
@@ -142,7 +150,20 @@ const Login: React.FC = () => {
       permissions: selectedDev.permissions,
       mockRole: selectedDev.mockRole,
     };
-    setAuth(fakeUser, 'dev-token-fake', 'dev-refresh-fake', 86400);
+    // Tạo fake LoginResponse để gọi setAuth
+    const fakeData = {
+      userId: fakeUser.id,
+      username: fakeUser.username,
+      fullName: fakeUser.fullName ?? '',
+      roleId: `role-${selectedDev.mockRole.toLowerCase()}`,
+      roleCode: selectedDev.mockRole,
+      roleName: selectedDev.label,
+      accessToken: 'dev-token-fake',
+      refreshToken: 'dev-refresh-fake',
+    };
+    setAuth(fakeData, 86400);
+    // Dev SUPER_ADMIN: show all; khác: empty map
+    setPermissionMap(selectedDev.mockRole === 'SUPER_ADMIN' ? null : {});
     navigate(from, { replace: true });
   };
 
@@ -215,31 +236,8 @@ const Login: React.FC = () => {
           }}
           styles={{ body: { padding: '32px 36px' } }}
         >
-          {/* Dev Mode Banner */}
-          {!devMode && (
-            <Alert
-              type="info"
-              showIcon
-              icon={<BugOutlined />}
-              message={
-                <span>
-                  API Auth chưa sẵn sàng.{' '}
-                  <Button
-                    type="link"
-                    size="small"
-                    style={{ padding: 0, height: 'auto' }}
-                    onClick={() => setDevMode(true)}
-                  >
-                    Dùng Dev Mode →
-                  </Button>
-                </span>
-              }
-              style={{ marginBottom: 20, borderRadius: 8 }}
-            />
-          )}
-
-          {/* ── Dev Mode Panel ──────────────────────────────────────────── */}
-          {devMode && (
+          {/* ── Dev Mode Panel (chỉ hiện trong development) ──────────────── */}
+          {import.meta.env.DEV && devMode && (
             <div style={{
               marginBottom: 20,
               padding: 16,
@@ -262,7 +260,7 @@ const Login: React.FC = () => {
                 </Button>
               </Space>
 
-              {/* Role switcher — 2 columns x 2 rows */}
+              {/* Role switcher */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
                 {DEV_ACCOUNTS.map((account) => (
                   <button
@@ -280,14 +278,12 @@ const Login: React.FC = () => {
                       transition: 'all 0.2s',
                     }}
                   >
-                    {/* Tên role */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                       <span style={{ color: account.color, fontSize: 14 }}>{account.icon}</span>
                       <span style={{ color: account.color, fontSize: 12, fontWeight: 700 }}>
                         {account.label}
                       </span>
                     </div>
-                    {/* Username */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
                       <UserOutlined style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }} />
                       <span style={{
@@ -297,7 +293,6 @@ const Login: React.FC = () => {
                         {account.username}
                       </span>
                     </div>
-                    {/* Password */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <LockOutlined style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)' }} />
                       <span style={{
@@ -334,7 +329,7 @@ const Login: React.FC = () => {
           )}
 
           {/* ── Login Form ─────────────────────────────────────────────── */}
-          {!devMode && (
+          {(!import.meta.env.DEV || !devMode) && (
             <>
               <Title level={4} style={{ color: '#fff', margin: '0 0 24px', fontWeight: 700 }}>
                 Đăng nhập
@@ -411,24 +406,28 @@ const Login: React.FC = () => {
             </>
           )}
 
-          {/* Divider */}
-          <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '20px 0' }}>
-            <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>hoặc</Text>
-          </Divider>
+          {/* Divider + Dev Mode toggle (chỉ trong development) */}
+          {import.meta.env.DEV && (
+            <>
+              <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '20px 0' }}>
+                <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>hoặc</Text>
+              </Divider>
 
-          <Button
-            block
-            icon={<BugOutlined />}
-            onClick={() => setDevMode(!devMode)}
-            style={{
-              borderRadius: 10, height: 40,
-              background: 'rgba(255,255,255,0.04)',
-              borderColor: 'rgba(255,255,255,0.12)',
-              color: 'rgba(255,255,255,0.5)',
-            }}
-          >
-            {devMode ? 'Dùng Login thật' : 'Dev Mode (Bypass API)'}
-          </Button>
+              <Button
+                block
+                icon={<BugOutlined />}
+                onClick={() => setDevMode(!devMode)}
+                style={{
+                  borderRadius: 10, height: 40,
+                  background: 'rgba(255,255,255,0.04)',
+                  borderColor: 'rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.5)',
+                }}
+              >
+                {devMode ? 'Dùng Login thật' : 'Dev Mode (Bypass API)'}
+              </Button>
+            </>
+          )}
         </Card>
 
         {/* Footer note */}
