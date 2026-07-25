@@ -112,7 +112,7 @@ axiosClient.interceptors.response.use(
 
       try {
         // Call refresh endpoint directly with axios (not axiosClient to avoid interceptor loop)
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        const response = await axios.post(`${API_BASE_URL}api/v1/auth/refresh`, {
           refreshToken: storedRefreshToken,
         });
 
