@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Card, Table, DatePicker, Tag, Space, Stat, Alert, Row, Col, Typography } from 'antd';
+import { Card, Table, DatePicker, Tag, Space, Alert, Row, Col, Typography } from 'antd';
 import dayjs from 'dayjs';
 import dailyReportService from '../../../api/services/dailyReportService';
 import type { DailyReportLine } from '../../../types/dailyReport';

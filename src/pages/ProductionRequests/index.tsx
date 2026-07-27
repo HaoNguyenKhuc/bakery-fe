@@ -289,9 +289,9 @@ const ProductionRequestList: React.FC = () => {
   const filtered = (list: ProductionRequestDetail[]) =>
     searchText.trim()
       ? list.filter(r =>
-          r.code?.toLowerCase().includes(searchText.toLowerCase()) ||
-          r.createdBy?.toLowerCase().includes(searchText.toLowerCase()),
-        )
+        r.code?.toLowerCase().includes(searchText.toLowerCase()) ||
+        r.createdBy?.toLowerCase().includes(searchText.toLowerCase()),
+      )
       : list;
 
   const handleRefreshAll = () => { refetchApproved(); refetchPending(); refetchRejected(); };
@@ -535,7 +535,7 @@ const ProductionRequestList: React.FC = () => {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => navigate('/production/requests/create')}
+            onClick={() => navigate('/prod-requests/create')}
           >
             Tạo Lệnh SX
           </Button>
