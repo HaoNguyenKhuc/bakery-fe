@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Table, Button, Input, Tag, Space, Typography, Tabs,
   Modal, Descriptions, message, DatePicker, Select,
@@ -77,6 +77,20 @@ const CompleteLineModal: React.FC<{
 }> = ({ open, requestId, line, onClose, onSuccess }) => {
   const [form] = Form.useForm();
 
+  // Bug fix: defaultValue bị ignore bởi Form controlled component.
+  // Dùng setFieldsValue để pre-fill giá trị khi modal mở hoặc line thay đổi.
+  useEffect(() => {
+    if (open && line) {
+      form.setFieldsValue({
+        qtyProduced: line.plannedQty > 0 ? line.plannedQty : undefined,
+        note: undefined,
+      });
+    }
+    if (!open) {
+      form.resetFields();
+    }
+  }, [open, line, form]);
+
   const mutation = useMutation({
     mutationFn: (vals: { qtyProduced: number; note?: string }) =>
       productionRequestService.completeLine(requestId, line!.id, vals),
@@ -108,12 +122,11 @@ const CompleteLineModal: React.FC<{
       )}
       <Form form={form} layout="vertical">
         <Form.Item name="qtyProduced" label="Số Lượng Thực Tế"
-          rules={[{ required: true, message: 'Vui lòng nhập số lượng' }]}>
+          rules={[{ required: true, message: 'Vui lòng nhập số lượng' }, { type: 'number', min: 0, message: 'Số lượng phải ≥ 0' }]}>
           <InputNumber
             min={0}
             style={{ width: '100%' }}
             placeholder="Nhập số lượng sản xuất được"
-            defaultValue={line?.plannedQty ?? undefined}
           />
         </Form.Item>
         <Form.Item name="note" label="Ghi Chú">
@@ -130,11 +143,41 @@ const ExpandedDetail: React.FC<{
   record: ProductionRequestDetail;
   onRefresh: () => void;
 }> = ({ record, onRefresh }) => {
+  const queryClient = useQueryClient();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [selectedLine, setSelectedLine] = useState<ProductionRequestLineDetail | null>(null);
 
   const lines = record.lines ?? [];
   const hasCompleted = lines.some((l) => l.lineStatus === 'COMPLETED');
+  const pendingLines = lines.filter(l => l.lineStatus === 'PENDING' || l.lineStatus === 'IN_PROGRESS');
+
+  // Batch complete: hoàn thành tất cả lines đang PENDING/IN_PROGRESS
+  const batchMutation = useMutation({
+    mutationFn: () =>
+      productionRequestService.completeLines(
+        record.id,
+        pendingLines.map(l => ({
+          lineId: l.id,
+          qtyProduced: l.plannedQty > 0 ? l.plannedQty : 0,
+        }))
+      ),
+    onSuccess: () => {
+      message.success(`✅ Hoàn thành ${pendingLines.length} dòng sản xuất!`);
+      queryClient.invalidateQueries({ queryKey: ['production-requests'] });
+      onRefresh();
+    },
+    onError: () => message.error('Hoàn thành batch thất bại. Vui lòng thử lại.'),
+  });
+
+  const handleBatchComplete = () => {
+    Modal.confirm({
+      title: 'Hoàn Thành Tất Cả Dòng',
+      content: `Hoàn thành ${pendingLines.length} dòng sản xuất với số lượng theo kế hoạch?`,
+      okText: 'Xác Nhận',
+      cancelText: 'Hủy',
+      onOk: () => batchMutation.mutate(),
+    });
+  };
 
   const lineColumns: ColumnsType<ProductionRequestLineDetail> = [
     {
@@ -251,6 +294,20 @@ const ExpandedDetail: React.FC<{
             </Text>
           }
         />
+      )}
+
+      {/* Nút Hoàn thành tất cả */}
+      {pendingLines.length > 0 && (
+        <div style={{ marginBottom: 10, textAlign: 'right' }}>
+          <Button
+            type="primary"
+            icon={<CheckOutlined />}
+            loading={batchMutation.isPending}
+            onClick={handleBatchComplete}
+          >
+            Hoàn thành tất cả ({pendingLines.length} dòng)
+          </Button>
+        </div>
       )}
 
       {/* Bảng chi tiết lines */}

@@ -5,7 +5,7 @@ import { message } from 'antd';
 
 // --- Configuration ---
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 const REQUEST_TIMEOUT = 15_000; // 15 seconds
 
 // --- Create Axios Instance ---
@@ -112,7 +112,7 @@ axiosClient.interceptors.response.use(
 
       try {
         // Call refresh endpoint directly with axios (not axiosClient to avoid interceptor loop)
-        const response = await axios.post(`${API_BASE_URL}api/v1/auth/refresh`, {
+        const response = await axios.post(`http://localhost:8080/api/v1/auth/refresh`, {
           refreshToken: storedRefreshToken,
         });
 
