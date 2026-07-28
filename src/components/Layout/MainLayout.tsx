@@ -59,9 +59,7 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/prod-adjustments': 'Điều Chỉnh Sản Xuất',
   '/stock-summary': 'Tồn Kho',
   '/inventory-requests': 'Phiếu Kho',
-  '/reports/daily': 'Báo Cáo Ngày',
-  '/reports/huy-banh': 'Hủy Bánh',
-  '/reports/pos-sales': 'POS Sales',
+  '/reports': 'Báo Cáo',
   '/users': 'Tài Khoản Người Dùng',
   '/roles': 'Phân Quyền (Roles)',
   '/activity-log': 'Nhật Ký Hoạt Động',
@@ -122,9 +120,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Báo cáo',
     items: [
-      { key: '/reports/daily',     label: '📊 Báo cáo ngày', screenCode: 'DAILY_REPORT' },
-      { key: '/reports/huy-banh',  label: '🗑 Hủy bánh',    screenCode: 'HUY_BANH' },
-      { key: '/reports/pos-sales', label: '🏪 POS Sales',   screenCode: 'POS_SALES' },
+      { key: '/reports', label: '📊 Báo cáo', screenCode: 'DAILY_REPORT' },
     ],
   },
   {
