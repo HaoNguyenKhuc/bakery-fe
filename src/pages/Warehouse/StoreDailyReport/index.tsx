@@ -16,6 +16,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dailyReportService from '../../../api/services/dailyReportService';
 import deliveryRecordService from '../../../api/services/deliveryRecordService';
 import posSaleService from '../../../api/services/posSaleService';
+import itemService from '../../../api/services/itemService';
 import type { DailyReport, DailyReportLine } from '../../../types/dailyReport';
 
 const { Title, Text } = Typography;
@@ -109,16 +110,27 @@ const StoreDailyReport: React.FC = () => {
   const { data: drData = [], isLoading: drLoading } = useQuery({
     queryKey: ['delivery-records', dateStr],
     queryFn: () => deliveryRecordService.getList(dateStr),
-    enabled: view === 'report' || isFinalized,
+    // Enable luôn khi có report — không phụ thuộc view để data sẵn sàng khi sang bước 2
+    enabled: !!report?.id,
+    retry: false,
   });
 
   const { data: posData = [], isLoading: posLoading } = useQuery({
     queryKey: ['pos-sales', dateStr],
     queryFn: () => posSaleService.getBySaleDate(dateStr),
-    enabled: view === 'report' || isFinalized,
+    enabled: !!report?.id,
+    retry: false,
   });
 
-  const isLoading = reportLoading || linesLoading || ydLinesLoading || drLoading || posLoading;
+  const { data: allItemsRes, isLoading: itemsLoading } = useQuery({
+    queryKey: ['items-all'],
+    queryFn: () => itemService.getAllItemsUnpaginated(),
+    enabled: !!report?.id,
+    staleTime: 5 * 60 * 1000,   // cache 5 phút
+  });
+  const allItems = allItemsRes?.data || [];
+
+  const isLoading = reportLoading || linesLoading || ydLinesLoading || drLoading || posLoading || itemsLoading;
 
   // Initialize view state exactly once per report load
   useEffect(() => {
@@ -142,60 +154,122 @@ const StoreDailyReport: React.FC = () => {
   const rawMainLines = useMemo(() => lines.filter((l) => !l.isCancelItem), [lines]);
 
   // Compute merged lines for DRAFT mode
+  // Compute merged lines cho view='report' và FINALIZED
   const computedLines = useMemo(() => {
     if (isFinalized) return rawMainLines;
 
-    // 1. Tồn hôm qua
+    // Bảng phụ: code → item từ allItems (nếu có)
+    const codeToItem: Record<string, any> = {};
+    allItems.forEach(i => { if (i.key) codeToItem[i.key] = i; });
+
+    // ydRemaining theo item.id
     const ydRemaining: Record<string, number> = {};
     ydLines.forEach((l) => {
-      if (l.item?.key && l.qtyRemainingActual != null) {
-        ydRemaining[l.item.key] = l.qtyRemainingActual;
-      }
+      const id = (l.item as any)?.id;
+      if (id && l.qtyRemainingActual != null) ydRemaining[id] = l.qtyRemainingActual;
     });
 
-    // 2. POS sales
-    const posByCode: Record<string, number> = {};
+    // POS theo itemId
+    const posByItemId: Record<string, number> = {};
     posData.forEach((ps) => {
-      const code = (ps as any).itemId || ps.exCode; // Fallback to exCode
-      if (!code) return;
-      posByCode[code] = (posByCode[code] || 0) + (ps.qtySold ?? 0);
+      const id = (ps as any).itemId || codeToItem[ps.exCode]?.id;
+      if (!id) return;
+      posByItemId[id] = (posByItemId[id] || 0) + (ps.qtySold ?? 0);
     });
 
-    // 3. Delivery records
-    const drByCode: Record<string, { produced: number; received: number }> = {};
+    // Delivery records: group by productCode
+    const drByCode: Record<string, { produced: number; received: number; name: string }> = {};
     drData.forEach((dr) => {
       const code = dr.productCode;
       if (!code) return;
-      if (!drByCode[code]) drByCode[code] = { produced: 0, received: 0 };
+      if (!drByCode[code]) drByCode[code] = { produced: 0, received: 0, name: dr.productName ?? code };
       drByCode[code].produced += dr.qtyProduced ?? 0;
       drByCode[code].received += dr.qtyReceived ?? 0;
     });
 
-    return rawMainLines.map((line) => {
-      const code = line.item?.key || '';
-      
-      const produced = drByCode[code]?.produced ?? null;
-      const received = drByCode[code]?.received ?? null;
-      const openPrev = ydRemaining[code] ?? null;
-      const qtySoldPos = line.qtyActualPOS ?? posByCode[code] ?? posByCode[(line as any).item?.id] ?? null;
+    // rawMainLines theo item.key (productCode) và item.id
+    const lineByCode: Record<string, DailyReportLine> = {};
+    const lineById: Record<string, DailyReportLine> = {};
+    rawMainLines.forEach((l) => {
+      const code = l.item?.key;
+      const id = (l.item as any)?.id;
+      if (code) lineByCode[code] = l;
+      if (id) lineById[id] = l;
+    });
 
-      // Discrepancy
+    const seenCodes = new Set<string>();
+    const seenIds = new Set<string>();
+    const rows: DailyReportLine[] = [];
+
+    // 1. Từ delivery records (nguồn chính Bếp SX & Nhận trong ngày)
+    Object.entries(drByCode).forEach(([code, dr]) => {
+      seenCodes.add(code);
+
+      // Tìm item: ưu tiên từ reportLine, sau đó allItems
+      const reportLine = lineByCode[code];
+      const fallbackItem = codeToItem[code];
+
+      // itemId: lấy từ reportLine hoặc allItems
+      const itemId: string | undefined = (reportLine?.item as any)?.id ?? fallbackItem?.id;
+      if (itemId) seenIds.add(itemId);
+
+      const openPrev = itemId ? (ydRemaining[itemId] ?? null) : null;
+      const qtySoldPos = itemId
+        ? (reportLine?.qtyActualPOS ?? posByItemId[itemId] ?? null)
+        : (reportLine?.qtyActualPOS ?? null);
+      const remaining = reportLine?.qtyRemainingActual ?? null;
+
+      const produced = dr.produced;
+      const received = dr.received;
       const qtyDiscrepancy = (produced != null && received != null) ? produced - received : null;
-      const qtyExpectedSale = (received != null && line.qtyRemainingActual != null) ? received - line.qtyRemainingActual : null;
+      const qtyExpectedSale = (received != null && remaining != null) ? received - remaining : null;
       const discrepancyPos = (qtyExpectedSale != null && qtySoldPos != null) ? qtyExpectedSale - qtySoldPos : null;
 
-      return {
-        ...line,
-        qtyOpenPrev: openPrev ?? line.qtyOpenPrev,
-        qtyProduced: produced ?? line.qtyProduced,
-        qtyReceivedShop: received ?? line.qtyReceivedShop,
-        qtyActualPOS: qtySoldPos ?? line.qtyActualPOS,
-        qtyDiscrepancy: qtyDiscrepancy ?? line.qtyDiscrepancy,
-        qtyExpectedSale: qtyExpectedSale ?? line.qtyExpectedSale,
-        qtyPOSDiscrepancy: discrepancyPos ?? line.qtyPOSDiscrepancy,
-      };
+      rows.push({
+        id: reportLine?.id || `temp-${code}`,
+        item: {
+          id: itemId ?? `id-${code}`,
+          key: code,
+          name: reportLine?.item?.name ?? fallbackItem?.name ?? dr.name ?? code,
+        },
+        qtyOpenPrev: openPrev,
+        qtyProduced: produced,
+        qtyReceivedShop: received,
+        qtyActualPOS: qtySoldPos,
+        qtyRemainingActual: remaining,
+        qtyDiscrepancy: qtyDiscrepancy,
+        qtyExpectedSale: qtyExpectedSale,
+        qtyPOSDiscrepancy: discrepancyPos,
+      } as any);
     });
-  }, [rawMainLines, isFinalized, ydLines, posData, drData]);
+
+    // 2. Từ today lines (sản phẩm không có trong DR)
+    rawMainLines.forEach(line => {
+      const code = line.item?.key;
+      const itemId = (line.item as any)?.id;
+      if ((code && seenCodes.has(code)) || (itemId && seenIds.has(itemId))) return;
+
+      const openPrev = (itemId && ydRemaining[itemId] != null) ? ydRemaining[itemId] : (line.qtyOpenPrev ?? null);
+      const qtySoldPos = (itemId && posByItemId[itemId] != null) ? posByItemId[itemId] : (line.qtyActualPOS ?? null);
+      const qtyExpectedSale = (line.qtyReceivedShop != null && line.qtyRemainingActual != null)
+        ? line.qtyReceivedShop - line.qtyRemainingActual
+        : null;
+      const discrepancyPos = (qtyExpectedSale != null && qtySoldPos != null)
+        ? qtyExpectedSale - qtySoldPos
+        : null;
+
+      rows.push({
+        ...line,
+        qtyOpenPrev: openPrev,
+        qtyActualPOS: qtySoldPos,
+        qtyExpectedSale: qtyExpectedSale,
+        qtyPOSDiscrepancy: discrepancyPos,
+      } as any);
+    });
+
+    return rows;
+  }, [rawMainLines, isFinalized, ydLines, posData, drData, allItems]);
+
 
   // ── Summary stats ──────────────────────────────────────────────────────────
   const totalSX = computedLines.reduce((s, l) => s + (l.qtyProduced ?? 0), 0);
@@ -208,8 +282,8 @@ const StoreDailyReport: React.FC = () => {
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const remainingMutation = useMutation({
-    mutationFn: ({ lineId, qty }: { lineId: string; qty: number }) =>
-      dailyReportService.updateRemaining(report!.id, lineId, qty),
+    mutationFn: ({ itemId, qty }: { itemId: string; qty: number }) =>
+      dailyReportService.updateRemaining(report!.id, itemId, qty),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['store-daily-report-lines', report?.id] });
     },
@@ -231,12 +305,12 @@ const StoreDailyReport: React.FC = () => {
   });
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSaveRemaining = useCallback(
-    (lineId: string) => {
-      const qty = remainingMap[lineId];
+  const handleBlurRemaining = useCallback(
+    (itemId: string) => {
+      const qty = remainingMap[itemId];
       if (qty === null || qty === undefined) return;
-      setSavingLineId(lineId);
-      remainingMutation.mutate({ lineId, qty });
+      setSavingLineId(itemId);
+      remainingMutation.mutate({ itemId, qty });
     },
     [remainingMap, remainingMutation],
   );
@@ -245,7 +319,10 @@ const StoreDailyReport: React.FC = () => {
   const handleOpenCancel = useCallback(() => {
     const initMap: Record<string, number> = {};
     cancelList.forEach((line) => {
-      initMap[line.id] = line.qtyCancelled ?? line.qtyRemainingActual ?? 0;
+      const itemId = (line.item as any)?.id;
+      if (itemId) {
+        initMap[itemId] = line.qtyCancelled ?? line.qtyRemainingActual ?? 0;
+      }
     });
     setCancelMap(initMap);
     setView('cancel');
@@ -257,8 +334,8 @@ const StoreDailyReport: React.FC = () => {
     setIsSavingCancel(true);
     try {
       await Promise.all(
-        Object.entries(cancelMap).map(([lineId, qty]) =>
-          dailyReportService.updateCancel(report.id, lineId, qty),
+        Object.entries(cancelMap).map(([itemId, qty]) =>
+          dailyReportService.updateCancel(report.id, itemId, qty),
         ),
       );
       await refetchCancel();
@@ -332,17 +409,19 @@ const StoreDailyReport: React.FC = () => {
             ? <Text strong>{row.qtyRemainingActual}</Text>
             : <Text type="secondary">—</Text>;
         }
+        const itemId = (row.item as any).id;
+        if (!itemId) return <Text type="secondary">—</Text>;
         return (
           <InputNumber
             min={0}
             size="small"
             style={{ width: 80 }}
-            value={remainingMap[row.id] !== undefined ? remainingMap[row.id] : row.qtyRemainingActual}
+            value={remainingMap[itemId] !== undefined ? remainingMap[itemId] : row.qtyRemainingActual}
             placeholder="0"
-            loading={savingLineId === row.id}
-            onChange={(v) => setRemainingMap((prev) => ({ ...prev, [row.id]: v }))}
-            onBlur={() => handleSaveRemaining(row.id)}
-            onPressEnter={() => handleSaveRemaining(row.id)}
+            loading={savingLineId === itemId}
+            onChange={(v) => setRemainingMap((prev) => ({ ...prev, [itemId]: v }))}
+            onBlur={() => handleBlurRemaining(itemId)}
+            onPressEnter={() => handleBlurRemaining(itemId)}
           />
         );
       },
@@ -497,16 +576,20 @@ const StoreDailyReport: React.FC = () => {
       key: 'cancel',
       align: 'right',
       width: 130,
-      render: (_, row) => (
-        <InputNumber
-          min={0}
-          size="small"
-          style={{ width: 90, borderColor: '#fca5a5' }}
-          value={cancelMap[row.id] ?? row.qtyCancelled ?? row.qtyRemainingActual ?? 0}
-          placeholder={String(row.qtyRemainingActual ?? 0)}
-          onChange={(v) => setCancelMap((prev) => ({ ...prev, [row.id]: v ?? 0 }))}
-        />
-      ),
+      render: (_, row) => {
+        const itemId = (row.item as any)?.id;
+        if (!itemId) return null;
+        return (
+          <InputNumber
+            min={0}
+            size="small"
+            style={{ width: 90, borderColor: '#fca5a5' }}
+            value={cancelMap[itemId] ?? row.qtyCancelled ?? row.qtyRemainingActual ?? 0}
+            placeholder={String(row.qtyRemainingActual ?? 0)}
+            onChange={(v) => setCancelMap((prev) => ({ ...prev, [itemId]: v ?? 0 }))}
+          />
+        );
+      },
     },
     {
       title: () => (
@@ -518,7 +601,8 @@ const StoreDailyReport: React.FC = () => {
       align: 'right',
       width: 100,
       render: (_, row) => {
-        const nv = cancelMap[row.id] ?? row.qtyCancelled;
+        const itemId = (row.item as any)?.id;
+        const nv = itemId ? cancelMap[itemId] ?? row.qtyCancelled : row.qtyCancelled;
         const ht = row.qtyRemainingActual;
         if (nv == null || ht == null) return <Text type="secondary">—</Text>;
         const diff = nv - ht;
@@ -536,7 +620,8 @@ const StoreDailyReport: React.FC = () => {
       align: 'center',
       width: 110,
       render: (_, row) => {
-        const nv = cancelMap[row.id] ?? row.qtyCancelled;
+        const itemId = (row.item as any)?.id;
+        const nv = itemId ? cancelMap[itemId] ?? row.qtyCancelled : row.qtyCancelled;
         const ht = row.qtyRemainingActual;
         if (nv == null) {
           return ht != null

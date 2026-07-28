@@ -8,6 +8,7 @@ import {
   PlusOutlined, SearchOutlined, CheckOutlined, CloseOutlined,
   EyeOutlined, DeleteOutlined, ReloadOutlined,
   ExclamationCircleOutlined, FileTextOutlined, CheckCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -18,7 +19,6 @@ import type {
   ProductionRequestDetail,
   ProductionRequestLineDetail,
   ProductionType,
-  CompleteLineRequest,
 } from '../../types';
 
 const { Title, Text } = Typography;
@@ -45,17 +45,25 @@ const STATUS_COLOR: Record<string, string> = {
   PENDING_APPROVAL: 'orange',
   APPROVED: 'green',
   REJECTED: 'red',
+  DRAFT: 'default',
 };
 const STATUS_LABEL: Record<string, string> = {
   PENDING_APPROVAL: 'Chờ Duyệt',
   APPROVED: 'Đã Duyệt',
   REJECTED: 'Từ Chối',
+  DRAFT: 'Nháp',
 };
 const LINE_STATUS_COLOR: Record<string, string> = {
   PENDING: 'default',
   IN_PROGRESS: 'processing',
   COMPLETED: 'success',
   CANCELLED: 'error',
+};
+const LINE_STATUS_LABEL: Record<string, string> = {
+  PENDING: 'Chờ làm',
+  IN_PROGRESS: 'Đang làm',
+  COMPLETED: 'Hoàn thành',
+  CANCELLED: 'Đã hủy',
 };
 
 // ─── Complete Line Modal ───────────────────────────────────────────────────────
@@ -94,13 +102,19 @@ const CompleteLineModal: React.FC<{
       {line && (
         <div style={{ marginBottom: 16 }}>
           <Text type="secondary">Sản phẩm: </Text><Text strong>{line.product?.name}</Text><br />
-          <Text type="secondary">SL kế hoạch: </Text><Text strong>{line.plannedQty}</Text>
+          <Text type="secondary">SL kế hoạch: </Text>
+          <Text strong>{line.plannedQty > 0 ? line.plannedQty : <Tag>Tự do</Tag>}</Text>
         </div>
       )}
       <Form form={form} layout="vertical">
         <Form.Item name="qtyProduced" label="Số Lượng Thực Tế"
           rules={[{ required: true, message: 'Vui lòng nhập số lượng' }]}>
-          <InputNumber min={0} style={{ width: '100%' }} placeholder="Nhập số lượng sản xuất được" />
+          <InputNumber
+            min={0}
+            style={{ width: '100%' }}
+            placeholder="Nhập số lượng sản xuất được"
+            defaultValue={line?.plannedQty ?? undefined}
+          />
         </Form.Item>
         <Form.Item name="note" label="Ghi Chú">
           <Input.TextArea rows={2} placeholder="Ghi chú (nếu có)..." />
@@ -110,127 +124,155 @@ const CompleteLineModal: React.FC<{
   );
 };
 
-// ─── Detail Modal ─────────────────────────────────────────────────────────────
+// ─── Expanded Detail Row ───────────────────────────────────────────────────────
 
-const DetailModal: React.FC<{
-  open: boolean;
-  record: ProductionRequestDetail | null;
-  onClose: () => void;
+const ExpandedDetail: React.FC<{
+  record: ProductionRequestDetail;
   onRefresh: () => void;
-}> = ({ open, record, onClose, onRefresh }) => {
+}> = ({ record, onRefresh }) => {
   const [completeOpen, setCompleteOpen] = useState(false);
   const [selectedLine, setSelectedLine] = useState<ProductionRequestLineDetail | null>(null);
 
+  const lines = record.lines ?? [];
+  const hasCompleted = lines.some((l) => l.lineStatus === 'COMPLETED');
+
   const lineColumns: ColumnsType<ProductionRequestLineDetail> = [
-    { title: '#', key: 'idx', width: 45, render: (_, __, i) => i + 1 },
-    { title: 'Sản Phẩm', key: 'product', render: (_, r) => <Text strong>{r.product?.name || '—'}</Text> },
     {
-      title: 'Công Thức', key: 'recipe',
-      render: (_, r) => r.recipe?.name ? <Tag>{r.recipe.name}</Tag> : <Text type="secondary">—</Text>,
+      title: '#',
+      key: 'idx',
+      width: 40,
+      render: (_, __, i) => <Text type="secondary" style={{ fontSize: 12 }}>{i + 1}</Text>,
     },
     {
-      title: 'SL KH', dataIndex: 'plannedQty', key: 'plannedQty', width: 90, align: 'right',
-      render: (v: number) => <Text strong>{v}</Text>,
+      title: 'Sản Phẩm',
+      key: 'product',
+      render: (_, r) => <Text strong>{r.product?.name || '—'}</Text>,
     },
     {
-      title: 'SL Thực', key: 'qtyProduced', width: 90, align: 'right',
-      render: (_, r) => r.deliveryRecord?.qtyProduced != null
-        ? <Text type="success">{r.deliveryRecord.qtyProduced}</Text>
-        : <Text type="secondary">—</Text>,
+      title: 'Kế Hoạch',
+      key: 'planned',
+      align: 'right',
+      width: 90,
+      render: (_, r) =>
+        r.plannedQty > 0 ? (
+          <Text strong>{r.plannedQty}</Text>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 11 }}>tự do</Text>
+        ),
     },
     {
-      title: 'Trạng Thái', dataIndex: 'lineStatus', key: 'lineStatus', width: 110,
-      render: (v: string) => <Tag color={LINE_STATUS_COLOR[v] || 'default'}>{v || '—'}</Tag>,
+      title: 'Bếp Làm',
+      key: 'qtyProduced',
+      align: 'right',
+      width: 85,
+      render: (_, r) =>
+        r.deliveryRecord?.qtyProduced != null ? (
+          <Text style={{ color: '#059669' }}>{r.deliveryRecord.qtyProduced}</Text>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
     },
     {
-      title: 'Thao Tác', key: 'action', width: 120, align: 'center',
-      render: (_, r) => r.lineStatus !== 'COMPLETED'
-        ? (
-          <Button size="small" type="primary" icon={<CheckCircleOutlined />}
-            onClick={() => { setSelectedLine(r); setCompleteOpen(true); }}>
-            Hoàn Thành
-          </Button>
-        )
-        : <Tag color="success">Đã Xong</Tag>,
+      title: 'Shop Nhận',
+      key: 'qtyReceived',
+      align: 'right',
+      width: 85,
+      render: (_, r) =>
+        r.deliveryRecord?.qtyReceived != null ? (
+          <Text style={{ color: '#2563eb' }}>{r.deliveryRecord.qtyReceived}</Text>
+        ) : (
+          <Text type="secondary">—</Text>
+        ),
+    },
+    {
+      title: 'Trạng Thái',
+      key: 'status',
+      width: 160,
+      render: (_, r) => (
+        <Space size={4}>
+          <Tag color={LINE_STATUS_COLOR[r.lineStatus] || 'default'}>
+            {LINE_STATUS_LABEL[r.lineStatus] || r.lineStatus}
+          </Tag>
+          {r.deliveryRecord?.deliveryStatus === 'READY' && (
+            <Tag color="warning">Chờ shop XN</Tag>
+          )}
+          {r.deliveryRecord?.deliveryStatus === 'CONFIRMED' && (
+            <Tag color="success">Đã giao</Tag>
+          )}
+        </Space>
+      ),
+    },
+    {
+      title: 'Hoàn Thành',
+      key: 'action',
+      width: 130,
+      render: (_, r) => {
+        if (r.lineStatus === 'PENDING' || r.lineStatus === 'IN_PROGRESS') {
+          return (
+            <Button
+              size="small"
+              type="primary"
+              icon={<CheckCircleOutlined />}
+              onClick={() => { setSelectedLine(r); setCompleteOpen(true); }}
+            >
+              Hoàn Thành
+            </Button>
+          );
+        }
+        if (r.lineStatus === 'COMPLETED' && r.deliveryRecord?.deliveryStatus === 'READY') {
+          return <Text style={{ fontSize: 11, color: '#b45309' }}>⏳ Chờ shop XN</Text>;
+        }
+        if (r.deliveryRecord?.deliveryStatus === 'CONFIRMED') {
+          return <Text style={{ fontSize: 11, color: '#059669' }}>✅ Đã giao</Text>;
+        }
+        if (r.lineStatus === 'COMPLETED') {
+          return <Tag color="success">Đã xong</Tag>;
+        }
+        return null;
+      },
     },
   ];
 
   return (
-    <>
-      <Modal
-        title={
-          <Space>
-            <FileTextOutlined />Chi Tiết Lệnh Sản Xuất
-            {record?.code && <Tag color="blue">{record.code}</Tag>}
-          </Space>
-        }
-        open={open}
-        onCancel={onClose}
-        footer={<Button onClick={onClose}>Đóng</Button>}
-        width={900}
-      >
-        {record && (
-          <>
-            <Descriptions bordered size="small" column={2} style={{ marginBottom: 20 }}>
-              <Descriptions.Item label="Mã Lệnh"><Text code>{record.code}</Text></Descriptions.Item>
-              <Descriptions.Item label="Loại">
-                <Tag color={TYPE_COLOR[record.productionType]}>{TYPE_LABEL[record.productionType]}</Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Ngày SX">
-                {dayjs(record.productionDate).format('DD/MM/YYYY')}
-              </Descriptions.Item>
-              <Descriptions.Item label="Trạng Thái">
-                <Tag color={STATUS_COLOR[record.approvalStatus] || 'default'}>
-                  {STATUS_LABEL[record.approvalStatus] || record.approvalStatus}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Người Tạo">{record.createdBy}</Descriptions.Item>
-              <Descriptions.Item label="Ngày Tạo">
-                {dayjs(record.createdAt).format('HH:mm DD/MM/YYYY')}
-              </Descriptions.Item>
-              {record.approvedBy && (
-                <Descriptions.Item label="Người Duyệt">{record.approvedBy}</Descriptions.Item>
-              )}
-              {record.approvedAt && (
-                <Descriptions.Item label="Ngày Duyệt">
-                  {dayjs(record.approvedAt).format('HH:mm DD/MM/YYYY')}
-                </Descriptions.Item>
-              )}
-              {record.rejectedReason && (
-                <Descriptions.Item label="Lý Do Từ Chối" span={2}>
-                  <Text type="danger">{record.rejectedReason}</Text>
-                </Descriptions.Item>
-              )}
-              {record.note && (
-                <Descriptions.Item label="Ghi Chú" span={2}>{record.note}</Descriptions.Item>
-              )}
-            </Descriptions>
-
-            <Title level={5} style={{ marginBottom: 12 }}>
-              Dòng Sản Xuất ({record.lines?.length || 0} dòng)
-            </Title>
-            <Table<ProductionRequestLineDetail>
-              columns={lineColumns}
-              dataSource={record.lines || []}
-              rowKey="id"
-              size="small"
-              pagination={false}
-              scroll={{ x: 650 }}
-            />
-          </>
-        )}
-      </Modal>
-
-      {record && (
-        <CompleteLineModal
-          open={completeOpen}
-          requestId={record.id}
-          line={selectedLine}
-          onClose={() => setCompleteOpen(false)}
-          onSuccess={onRefresh}
+    <div style={{ padding: '12px 16px', background: '#f8fafc' }}>
+      {/* Cảnh báo nếu có line đã hoàn thành */}
+      {hasCompleted && (
+        <Alert
+          type="warning"
+          showIcon
+          icon={<WarningOutlined />}
+          style={{ marginBottom: 10 }}
+          message={
+            <Text style={{ fontSize: 13 }}>
+              ⚠️ Có line đã hoàn thành →{' '}
+              <Text strong>Vào 🚚 Giao nhận để shop xác nhận và chuyển kho</Text>
+              {' '}(chọn đúng ngày:{' '}
+              <Text strong>{record.productionDate}</Text>)
+            </Text>
+          }
         />
       )}
-    </>
+
+      {/* Bảng chi tiết lines */}
+      <Table<ProductionRequestLineDetail>
+        columns={lineColumns}
+        dataSource={lines}
+        rowKey="id"
+        size="small"
+        pagination={false}
+        scroll={{ x: 680 }}
+        style={{ background: '#fff' }}
+      />
+
+      {/* CompleteLineModal */}
+      <CompleteLineModal
+        open={completeOpen}
+        requestId={record.id}
+        line={selectedLine}
+        onClose={() => setCompleteOpen(false)}
+        onSuccess={onRefresh}
+      />
+    </div>
   );
 };
 
@@ -243,9 +285,6 @@ const ProductionRequestList: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [filterDate, setFilterDate] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<ProductionType | ''>('');
-
-  const [detailOpen, setDetailOpen] = useState(false);
-  const [detailRecord, setDetailRecord] = useState<ProductionRequestDetail | null>(null);
 
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
@@ -303,6 +342,10 @@ const ProductionRequestList: React.FC = () => {
 
   const handleRefreshAll = () => { refetchApproved(); refetchPending(); refetchDraft(); refetchRejected(); };
 
+  const handleRefreshQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ['production-requests'] });
+  };
+
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
   const approveMutation = useMutation({
@@ -347,7 +390,16 @@ const ProductionRequestList: React.FC = () => {
     rejectMutation.mutate({ id: rejectTargetId, reason: rejectReason });
   };
 
-  // ── Columns ──────────────────────────────────────────────────────────────────
+  // ── Expandable row config ─────────────────────────────────────────────────────
+
+  const expandable = {
+    expandedRowRender: (record: ProductionRequestDetail) => (
+      <ExpandedDetail record={record} onRefresh={handleRefreshQueries} />
+    ),
+    rowExpandable: (record: ProductionRequestDetail) => (record.lines?.length ?? 0) > 0,
+  };
+
+  // ── Base columns ──────────────────────────────────────────────────────────────
 
   const baseColumns: ColumnsType<ProductionRequestDetail> = [
     {
@@ -364,7 +416,7 @@ const ProductionRequestList: React.FC = () => {
       sorter: (a, b) => (a.productionDate || '').localeCompare(b.productionDate || ''),
     },
     {
-      title: 'Số Dòng', key: 'lines', width: 90, align: 'center',
+      title: 'Số Dòng', key: 'lines', width: 85, align: 'center',
       render: (_, r) => <Badge count={r.lines?.length || 0} color="#1890ff" showZero />,
     },
     { title: 'Người Tạo', dataIndex: 'createdBy', key: 'createdBy', width: 140 },
@@ -377,12 +429,12 @@ const ProductionRequestList: React.FC = () => {
   const approvedColumns: ColumnsType<ProductionRequestDetail> = [
     ...baseColumns,
     {
-      title: 'Thao Tác', key: 'action', width: 110, align: 'center',
+      title: 'Thao Tác', key: 'action', width: 90, align: 'center',
       render: (_, record) => (
         <Space size={4}>
           <Tooltip title="Xem Chi Tiết">
             <Button type="text" icon={<EyeOutlined style={{ color: '#1890ff' }} />}
-              onClick={() => { setDetailRecord(record); setDetailOpen(true); }} />
+              onClick={(e) => { e.stopPropagation(); }} />
           </Tooltip>
           <Popconfirm
             title="Xóa Lệnh Sản Xuất"
@@ -412,15 +464,11 @@ const ProductionRequestList: React.FC = () => {
         <Space>
           <Tooltip title="Phê Duyệt">
             <Button size="small" type="primary" icon={<CheckOutlined />}
-              onClick={() => handleApprove(record)} loading={approveMutation.isPending} />
-          </Tooltip>
-          <Tooltip title="Xem Chi Tiết">
-            <Button size="small" icon={<EyeOutlined />}
-              onClick={() => { setDetailRecord(record); setDetailOpen(true); }} />
+              onClick={(e) => { e.stopPropagation(); handleApprove(record); }} loading={approveMutation.isPending} />
           </Tooltip>
           <Tooltip title="Từ Chối">
             <Button size="small" danger icon={<CloseOutlined />}
-              onClick={() => handleOpenReject(record)} />
+              onClick={(e) => { e.stopPropagation(); handleOpenReject(record); }} />
           </Tooltip>
         </Space>
       ),
@@ -432,15 +480,6 @@ const ProductionRequestList: React.FC = () => {
     {
       title: 'Lý Do Từ Chối', dataIndex: 'rejectedReason', key: 'rejectedReason',
       render: (v: string) => <Text type="danger">{v || '—'}</Text>,
-    },
-    {
-      title: 'Thao Tác', key: 'action', width: 80, align: 'center',
-      render: (_, record) => (
-        <Tooltip title="Xem Chi Tiết">
-          <Button type="text" icon={<EyeOutlined style={{ color: '#1890ff' }} />}
-            onClick={() => { setDetailRecord(record); setDetailOpen(true); }} />
-        </Tooltip>
-      ),
     },
   ];
 
@@ -454,8 +493,15 @@ const ProductionRequestList: React.FC = () => {
       ),
       children: (
         <Table<ProductionRequestDetail>
-          columns={approvedColumns} dataSource={filtered(approvedList)}
-          loading={approvedLoading} rowKey="id" size="middle"
+          columns={approvedColumns}
+          dataSource={filtered(approvedList)}
+          loading={approvedLoading}
+          rowKey="id"
+          size="middle"
+          expandable={expandable}
+          onRow={(record) => ({
+            style: { cursor: 'pointer' },
+          })}
           pagination={{ pageSize: 8, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} lệnh` }}
         />
       ),
@@ -470,8 +516,15 @@ const ProductionRequestList: React.FC = () => {
       ),
       children: (
         <Table<ProductionRequestDetail>
-          columns={pendingColumns} dataSource={filtered(pendingList)}
-          loading={pendingLoading || draftLoading} rowKey="id" size="middle"
+          columns={pendingColumns}
+          dataSource={filtered(pendingList)}
+          loading={pendingLoading || draftLoading}
+          rowKey="id"
+          size="middle"
+          expandable={expandable}
+          onRow={(record) => ({
+            style: { cursor: 'pointer' },
+          })}
           pagination={{ pageSize: 8 }}
         />
       ),
@@ -486,8 +539,12 @@ const ProductionRequestList: React.FC = () => {
       ),
       children: (
         <Table<ProductionRequestDetail>
-          columns={rejectedColumns} dataSource={filtered(rejectedList)}
-          loading={rejectedLoading} rowKey="id" size="middle"
+          columns={rejectedColumns}
+          dataSource={filtered(rejectedList)}
+          loading={rejectedLoading}
+          rowKey="id"
+          size="middle"
+          expandable={expandable}
           pagination={{ pageSize: 8 }}
         />
       ),
@@ -502,7 +559,7 @@ const ProductionRequestList: React.FC = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <Title level={3} style={{ margin: 0 }}>Quản Lý Lệnh Sản Xuất</Title>
-          <Text type="secondary">Tạo, xem và phê duyệt các lệnh sản xuất hàng ngày và theo đơn</Text>
+          <Text type="secondary">Bấm vào từng lệnh để xem và thao tác chi tiết từng dòng sản xuất</Text>
         </div>
         <Space>
           <Input
@@ -570,17 +627,22 @@ const ProductionRequestList: React.FC = () => {
         />
       )}
 
+      {/* Expand hint */}
+      <Alert
+        type="info"
+        showIcon
+        icon={<FileTextOutlined />}
+        style={{ marginBottom: 12 }}
+        message={
+          <Text style={{ fontSize: 12 }}>
+            💡 Bấm vào hàng để <Text strong>mở rộng chi tiết</Text> và thao tác hoàn thành từng dòng sản xuất.
+          </Text>
+        }
+      />
+
       <Divider style={{ margin: '0 0 20px' }} />
 
       <Tabs defaultActiveKey="approved" items={tabItems} />
-
-      {/* Detail Modal */}
-      <DetailModal
-        open={detailOpen}
-        record={detailRecord}
-        onClose={() => setDetailOpen(false)}
-        onRefresh={() => queryClient.invalidateQueries({ queryKey: ['production-requests'] })}
-      />
 
       {/* Reject Modal */}
       <Modal

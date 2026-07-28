@@ -1,9 +1,12 @@
 // ── Delivery Record Types ──────────────────────────────────────────────────────
 
-export type DeliveryStatus = 'PENDING' | 'CONFIRMED' | 'DISCREPANCY';
+export type DeliveryStatus = 'READY' | 'CONFIRMED' | 'DISCREPANCY';
 
 export interface DeliveryRecordResponse {
   id: string;
+  productCode?: string;           // Mã sản phẩm (dùng để merge với daily report)
+  productName?: string;           // Tên sản phẩm
+  plannedQty?: number;            // Số lượng kế hoạch
   qtyProduced: number;
   qtyReceived: number;
   discrepancy: number;
