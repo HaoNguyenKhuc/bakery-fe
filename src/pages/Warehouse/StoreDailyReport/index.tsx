@@ -18,6 +18,7 @@ import deliveryRecordService from '../../../api/services/deliveryRecordService';
 import posSaleService from '../../../api/services/posSaleService';
 import itemService from '../../../api/services/itemService';
 import type { DailyReport, DailyReportLine } from '../../../types/dailyReport';
+import type { Item } from '../../../types';
 
 const { Title, Text } = Typography;
 
@@ -128,7 +129,8 @@ const StoreDailyReport: React.FC = () => {
     enabled: !!report?.id,
     staleTime: 5 * 60 * 1000,   // cache 5 phút
   });
-  const allItems = allItemsRes?.data || [];
+  // getAllItemsUnpaginated trả về Item[] trực tiếp (không có wrapper .data)
+  const allItems: Item[] = (allItemsRes as unknown as Item[]) || [];
 
   const isLoading = reportLoading || linesLoading || ydLinesLoading || drLoading || posLoading || itemsLoading;
 
@@ -159,8 +161,9 @@ const StoreDailyReport: React.FC = () => {
     if (isFinalized) return rawMainLines;
 
     // Bảng phụ: code → item từ allItems (nếu có)
-    const codeToItem: Record<string, any> = {};
-    allItems.forEach(i => { if (i.key) codeToItem[i.key] = i; });
+    // Item.code là field chính xác, không phải .key
+    const codeToItem: Record<string, Item> = {};
+    allItems.forEach(i => { if (i.code) codeToItem[i.code] = i; });
 
     // ydRemaining theo item.id
     const ydRemaining: Record<string, number> = {};
@@ -409,8 +412,22 @@ const StoreDailyReport: React.FC = () => {
             ? <Text strong>{row.qtyRemainingActual}</Text>
             : <Text type="secondary">—</Text>;
         }
-        const itemId = (row.item as any).id;
-        if (!itemId) return <Text type="secondary">—</Text>;
+        const itemId = (row.item as any).id as string | undefined;
+        // itemId giả (id-${code}) nghĩa là allItems chưa load xong → disable để tránh gọi sai API
+        const isFakeId = !itemId || itemId.startsWith('id-');
+        if (isFakeId) {
+          return (
+            <Tooltip title="Đang tải UUID sản phẩm, vui lòng chờ...">
+              <InputNumber
+                min={0}
+                size="small"
+                style={{ width: 80 }}
+                disabled
+                placeholder="..."
+              />
+            </Tooltip>
+          );
+        }
         return (
           <InputNumber
             min={0}
