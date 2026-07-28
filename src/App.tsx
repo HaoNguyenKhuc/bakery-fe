@@ -32,6 +32,7 @@ const ProdAdjustments = React.lazy(() => import('./pages/ProdAdjustments'));
 // Kho
 const MainWarehouse = React.lazy(() => import('./pages/Warehouse/Main'));
 const InventoryRequests = React.lazy(() => import('./pages/Warehouse/InventoryRequests'));
+const InventoryRequestCreate = React.lazy(() => import('./pages/Warehouse/InventoryRequestCreate'));
 
 // Báo cáo
 const DailyReport = React.lazy(() => import('./pages/Reports/DailyReport'));
@@ -105,7 +106,9 @@ const App: React.FC = () => {
         <Route path="prod-adjustments" element={<Lazy><ProdAdjustments /></Lazy>} />
 
         {/* ── Kho ── */}
-        <Route path="stock-summary" element={<Lazy><MainWarehouse /></Lazy>} />
+        <Route path="warehouse/:type/phieu-kho/create" element={<Lazy><InventoryRequestCreate /></Lazy>} />
+        <Route path="warehouse/:type" element={<Lazy><MainWarehouse /></Lazy>} />
+        <Route path="stock-summary" element={<Navigate to="/warehouse/kho-chinh" replace />} />
         <Route path="inventory-requests" element={<Lazy><InventoryRequests /></Lazy>} />
 
         {/* ── Báo cáo ── */}

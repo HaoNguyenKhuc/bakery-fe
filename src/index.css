@@ -188,22 +188,58 @@ body {
   font-size: 10px;
   font-weight: 700;
   color: #64748b;
-  padding: 8px 14px 3px;
+  padding: 8px 14px 6px;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  border-radius: 6px;
+  margin: 2px 8px 2px 8px;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.sidebar-nav-label.tree-header:hover {
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.tree-label-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-toggle-icon {
+  font-size: 9px;
+  color: #64748b;
+  flex-shrink: 0;
+}
+
+.sidebar-nav-label.tree-header:hover .tree-toggle-icon {
+  color: #38bdf8;
+}
+
+/* Tree structure indentation line */
+.sidebar-nav-children {
+  position: relative;
+  margin-left: 14px;
+  padding-left: 4px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: 2px;
+  margin-bottom: 6px;
+  transition: all 0.2s ease-in-out;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 14px 8px 20px;
+  padding: 8px 14px 8px 16px;
   cursor: pointer;
   color: #94a3b8;
   border-left: 3px solid transparent;
+  border-radius: 0 6px 6px 0;
   transition: all 0.15s;
   font-size: 13px;
   white-space: nowrap;
@@ -213,12 +249,12 @@ body {
 }
 
 .sidebar-nav-item:hover {
-  background: #334155;
-  color: #e2e8f0;
+  background: rgba(51, 65, 85, 0.6);
+  color: #f1f5f9;
 }
 
 .sidebar-nav-item.active {
-  background: #0f172a;
+  background: rgba(15, 23, 42, 0.8);
   color: #38bdf8;
   border-left-color: #38bdf8;
   font-weight: 600;
@@ -229,10 +265,19 @@ body {
   display: none;
 }
 
+.sidebar.ant-layout-sider-collapsed .sidebar-nav-children {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: none;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .sidebar.ant-layout-sider-collapsed .sidebar-nav-item {
   padding: 12px 0;
   justify-content: center;
   border-left: 3px solid transparent;
+  border-radius: 0;
 }
 
 .sidebar.ant-layout-sider-collapsed .sidebar-nav-item.active {

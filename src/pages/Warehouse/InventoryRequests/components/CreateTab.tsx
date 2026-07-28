@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form, Select, DatePicker, Input, Button, Card, Row, Col, Space, InputNumber, Divider, Tooltip, message } from 'antd';
 import { ArrowLeftOutlined, ImportOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,11 +13,23 @@ interface RequestLine {
   note?: string;
 }
 
-const CreateTab: React.FC = () => {
+interface CreateTabProps {
+  warehouseFilter?: { id?: string; code?: string; name?: string };
+  onSuccess?: () => void;
+  onCancel?: () => void;
+}
+
+const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCancel }) => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
   const [lines, setLines] = useState<RequestLine[]>([{ quantity: 1 }]);
   const requestType = Form.useWatch('requestType', form);
+
+  useEffect(() => {
+    if (warehouseFilter?.id) {
+      form.setFieldsValue({ targetWarehouseId: warehouseFilter.id });
+    }
+  }, [warehouseFilter?.id, form]);
 
   // Queries for lookups
   const { data: ingredientsData, isLoading: loadingIngredients } = useQuery({
@@ -56,7 +68,11 @@ const CreateTab: React.FC = () => {
       message.success('Đã gửi yêu cầu kho thành công!');
       queryClient.invalidateQueries({ queryKey: ['inventory-requests'] });
       form.resetFields();
+      if (warehouseFilter?.id) {
+        form.setFieldsValue({ targetWarehouseId: warehouseFilter.id });
+      }
       setLines([{ quantity: 1 }]);
+      onSuccess?.();
     },
     onError: () => {
       message.error('Gửi yêu cầu thất bại. Vui lòng thử lại.');
@@ -105,7 +121,7 @@ const CreateTab: React.FC = () => {
         form={form}
         layout="vertical"
         onFinish={onFinish}
-        initialValues={{ requestType: 'PURCHASE', requestDate: dayjs() }}
+        initialValues={{ requestType: 'PURCHASE', requestDate: dayjs(), targetWarehouseId: warehouseFilter?.id }}
       >
         <Row gutter={16}>
           <Col span={12}>
@@ -253,6 +269,11 @@ const CreateTab: React.FC = () => {
         <Divider />
         <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
           <Space>
+            {onCancel && (
+              <Button onClick={onCancel}>
+                Hủy / Quay lại
+              </Button>
+            )}
             <Button onClick={() => {
               form.resetFields();
               setLines([{ quantity: 1 }]);

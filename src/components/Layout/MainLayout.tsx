@@ -114,8 +114,9 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Kho',
     items: [
-      { key: '/stock-summary',      label: '📦 Tồn kho',  screenCode: 'STOCK_SUMMARY' },
-      { key: '/inventory-requests', label: '📋 Phiếu kho', screenCode: 'INVENTORY_REQUESTS' },
+      { key: '/warehouse/kho-chinh', label: '🏠 Kho Chính', screenCode: 'STOCK_SUMMARY' },
+      { key: '/warehouse/kho-bep',   label: '🔥 Kho Bếp',    screenCode: 'STOCK_SUMMARY' },
+      { key: '/warehouse/cua-hang',  label: '🛍️ Cửa Hàng',   screenCode: 'STOCK_SUMMARY' },
     ],
   },
   {
@@ -182,6 +183,32 @@ const MainLayout: React.FC = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Track expanded tree nodes in sidebar (all expanded by default)
+  const [expandedGroups, setExpandedGroups] = useState<string[]>(() =>
+    NAV_GROUPS.map((g) => g.label)
+  );
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) =>
+      prev.includes(label)
+        ? prev.filter((g) => g !== label)
+        : [...prev, label]
+    );
+  };
+
+  // Auto-expand group when active route changes
+  useEffect(() => {
+    const activeGroup = NAV_GROUPS.find((group) =>
+      group.items.some((item) => {
+        const itemPath = item.key.split('?')[0];
+        return location.pathname.startsWith(itemPath) && (itemPath !== '/' || location.pathname === '/');
+      })
+    );
+    if (activeGroup && !expandedGroups.includes(activeGroup.label)) {
+      setExpandedGroups((prev) => [...prev, activeGroup.label]);
+    }
+  }, [location.pathname, expandedGroups]);
 
   // Build breadcrumb items from path
   const breadcrumbItems = useMemo(() => {
@@ -313,26 +340,63 @@ const MainLayout: React.FC = () => {
           {!collapsed && <span className="sidebar-logo-text">Bakery Dev</span>}
         </div>
 
-        {/* Custom Navigation Menu matching dev-ui.html */}
+        {/* Custom Navigation Tree Menu matching dev-ui.html */}
         <nav className="sidebar-nav">
-          {filteredNavGroups.map((group) => (
-            <div key={group.label} className="sidebar-nav-group">
-              <div className="sidebar-nav-label">{group.label}</div>
-              {group.items.map((item) => {
-                const isActive = location.pathname.startsWith(item.key) && (item.key !== '/' || location.pathname === '/');
-                return (
-                  <div
-                    key={item.key}
-                    className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-                    onClick={() => navigate(item.key)}
-                    title={collapsed ? item.label : undefined}
-                  >
-                    <span className="sidebar-nav-item-text">{item.label}</span>
+          {filteredNavGroups.map((group) => {
+            const isExpanded = expandedGroups.includes(group.label);
+            const showChildren = collapsed || isExpanded;
+            return (
+              <div key={group.label} className="sidebar-nav-group">
+                <div
+                  className="sidebar-nav-label tree-header"
+                  onClick={() => !collapsed && toggleGroup(group.label)}
+                  style={{
+                    cursor: collapsed ? 'default' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                  title={collapsed ? group.label : `Nhấp để ${isExpanded ? 'thu gọn' : 'mở rộng'}`}
+                >
+                  <span className="tree-label-text">{group.label}</span>
+                  {!collapsed && (
+                    <span
+                      className="tree-toggle-icon"
+                      style={{
+                        fontSize: 9,
+                        transition: 'transform 0.2s ease',
+                        transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                        opacity: 0.7,
+                      }}
+                    >
+                      ▼
+                    </span>
+                  )}
+                </div>
+                {showChildren && (
+                  <div className="sidebar-nav-children">
+                    {group.items.map((item) => {
+                      const itemPath = item.key.split('?')[0];
+                      const itemQuery = item.key.includes('?') ? item.key.split('?')[1] : null;
+                      const isPathMatch = location.pathname.startsWith(itemPath) && (itemPath !== '/' || location.pathname === '/');
+                      const isQueryMatch = !itemQuery || location.search.includes(itemQuery) || (!location.search && itemQuery === 'tab=kho-chinh');
+                      const isActive = isPathMatch && isQueryMatch;
+                      return (
+                        <div
+                          key={item.key}
+                          className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                          onClick={() => navigate(item.key)}
+                          title={collapsed ? item.label : undefined}
+                        >
+                          <span className="sidebar-nav-item-text">{item.label}</span>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
-          ))}
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Sidebar Footer */}

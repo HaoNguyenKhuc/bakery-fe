@@ -1,21 +1,22 @@
-import React, { useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  Form, Input, Button, Select, DatePicker, InputNumber,
-  Typography, Card, message, Spin, Alert, Divider,
-  Row, Col, Space, Table, Popconfirm,
+  Card, Form, Input, Button, Select, DatePicker, InputNumber,
+  Typography, message, Table, Tag, Space, Modal, Row, Col, Tooltip, Alert
 } from 'antd';
 import {
-  ArrowLeftOutlined, PlusOutlined, SaveOutlined,
-  DeleteOutlined, OrderedListOutlined,
+  PlusOutlined, SaveOutlined, DeleteOutlined, CheckCircleOutlined,
+  ReloadOutlined, ArrowLeftOutlined, UnorderedListOutlined
 } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import dayjs from 'dayjs';
-import { productionRequestService, itemService, recipeService } from '../../api/services';
-import type { ProductionRequestInput, ProductionType } from '../../types';
+import dayjs, { Dayjs } from 'dayjs';
+import { productionRequestService, itemService } from '../../api/services';
+import type { ProductionRequestInput, ProductionRequestDetail } from '../../types';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
+const { Option } = Select;
 
+// Helper to safely extract array from API response
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const extractArray = (data: any): any[] => {
   if (Array.isArray(data)) return data;
@@ -24,365 +25,520 @@ const extractArray = (data: any): any[] => {
   return [];
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+// Status Badge helper
+const renderStatusBadge = (status?: string) => {
+  switch (status) {
+    case 'APPROVED':
+      return <Tag color="success" icon={<CheckCircleOutlined />}>Đã duyệt</Tag>;
+    case 'PENDING_APPROVAL':
+    case 'DRAFT':
+    case 'PENDING':
+      return <Tag color="warning">Chờ duyệt</Tag>;
+    case 'REJECTED':
+      return <Tag color="error">Từ chối</Tag>;
+    case 'COMPLETED':
+      return <Tag color="blue">Hoàn thành</Tag>;
+    case 'IN_PROGRESS':
+      return <Tag color="processing">Đang SX</Tag>;
+    default:
+      return <Tag color="default">{status || '—'}</Tag>;
+  }
+};
+
+interface PRLineInput {
+  productId: string;
+  plannedQty?: number;
+  sortOrder: number;
+}
 
 const ProductionRequestForm: React.FC = () => {
   const navigate = useNavigate();
-  const { id } = useParams<{ id: string }>();
-  const isEdit = Boolean(id);
-  const [form] = Form.useForm();
   const queryClient = useQueryClient();
 
-  // ── Lookup data ───────────────────────────────────────────────────────────────
+  // Filter state
+  const [dailyFilterDate, setDailyFilterDate] = useState<Dayjs>(dayjs());
 
-  const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: ['items-all-products'],
-    queryFn: () => itemService.getAllItemsUnpaginated({ itemType: 'PRODUCT' }),
+  // Form states for DAILY / ORDER
+  const [dailyType, setDailyType] = useState<'DAILY' | 'ORDER' | 'SEMI'>('DAILY');
+  const [dailyDate, setDailyDate] = useState<Dayjs>(dayjs());
+  const [dailyNote, setDailyNote] = useState<string>('');
+  const [dailyLines, setDailyLines] = useState<PRLineInput[]>([
+    { productId: '', plannedQty: undefined, sortOrder: 1 }
+  ]);
+
+  // 1. Fetch all items (Products & Semi Products)
+  const { data: itemsRaw, isLoading: itemsLoading } = useQuery({
+    queryKey: ['items-all-products-and-semi'],
+    queryFn: () => itemService.getAllItemsUnpaginated({}),
     retry: false,
   });
 
-  const { data: recipesData, isLoading: recipesLoading } = useQuery({
-    queryKey: ['recipes-all'],
-    queryFn: () => recipeService.getAll(),
+  const allItems = useMemo(() => extractArray(itemsRaw), [itemsRaw]);
+
+  // Filter products for DAILY / ORDER
+  const productOptions = useMemo(() => {
+    return allItems
+      .filter((item) => item.itemType === 'PRODUCT' || item.itemType === 'SEMI_PRODUCT' || !item.itemType)
+      .map((item) => ({
+        value: item.id,
+        label: `[${item.code || 'SP'}] ${item.name}`,
+        unit: item.baseUnit || item.unit || 'cái',
+        type: item.itemType
+      }));
+  }, [allItems]);
+
+  // 2. Fetch Production Requests List
+  const {
+    data: prListRaw,
+    isLoading: prListLoading,
+    refetch: refetchPRs
+  } = useQuery({
+    queryKey: ['production-requests-list-unpaginated'],
+    queryFn: () => productionRequestService.list({ size: 200 }),
     retry: false,
   });
 
-  const itemOptions = extractArray(itemsData).map((item: { id: string; name: string; code: string }) => ({
-    value: item.id,
-    label: `[${item.code}] ${item.name}`,
-  }));
+  const allPRs: ProductionRequestDetail[] = useMemo(() => extractArray(prListRaw), [prListRaw]);
 
-  const recipeOptions = extractArray(recipesData).map((r: { id: string; product?: { name: string }; version?: number }) => ({
-    value: r.id,
-    label: `${r.product?.name || r.id} — v${r.version ?? 1}`,
-  }));
+  // Filter PRs for DAILY / ORDER Table
+  const dailyPRList = useMemo(() => {
+    const targetDateStr = dailyFilterDate.format('YYYY-MM-DD');
+    return allPRs.filter((r) => {
+      const rDate = r.productionDate?.slice(0, 10);
+      return rDate === targetDateStr && r.productionType !== 'SEMI';
+    });
+  }, [allPRs, dailyFilterDate]);
 
-  // ── Load existing when editing ────────────────────────────────────────────────
+  // ── Mutations ─────────────────────────────────────────────────────────────
 
-  const { data: existing, isLoading: existingLoading, isError: existingError } = useQuery({
-    queryKey: ['production-request', id],
-    queryFn: () => productionRequestService.getById(id!),
-    enabled: isEdit,
-    retry: false,
-  });
-
-  useEffect(() => {
-    if (existing && isEdit) {
-      form.setFieldsValue({
-        productionType: existing.productionType,
-        productionDate: existing.productionDate ? dayjs(existing.productionDate) : null,
-        note: existing.note,
-        lines: (existing.lines || []).map((l, idx) => ({
-          productId: l.product?.key || '',
-          recipeId: l.recipe?.key || undefined,
-          plannedQty: l.plannedQty,
-          sortOrder: l.sortOrder ?? idx + 1,
-          note: l.note,
-        })),
-      });
-    } else if (!isEdit) {
-      form.resetFields();
-    }
-  }, [existing, isEdit, form]);
-
-  // ── Mutations ─────────────────────────────────────────────────────────────────
-
-  const mutation = useMutation({
-    mutationFn: (data: ProductionRequestInput) =>
-      isEdit
-        ? productionRequestService.update(id!, data)
-        : productionRequestService.create(data),
-    onSuccess: (result) => {
-      message.success(
-        isEdit ? 'Cập nhật lệnh sản xuất thành công!' : `Tạo thành công! Mã: ${result?.code || ''}`,
-      );
+  // Create PR Mutation
+  const createMutation = useMutation({
+    mutationFn: (data: ProductionRequestInput) => productionRequestService.create(data),
+    onSuccess: (res) => {
+      message.success(`✅ Đã tạo phiếu sản xuất (${res?.code || 'Thành công'})!`);
+      queryClient.invalidateQueries({ queryKey: ['production-requests-list-unpaginated'] });
       queryClient.invalidateQueries({ queryKey: ['production-requests'] });
-      navigate('/production/requests');
     },
-    onError: () =>
-      message.error(isEdit ? 'Cập nhật thất bại. Vui lòng kiểm tra lại.' : 'Tạo lệnh thất bại. Vui lòng kiểm tra lại.'),
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Lỗi khi tạo phiếu sản xuất!');
+    }
   });
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // Approve PR Mutation
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => productionRequestService.approve(id),
+    onSuccess: () => {
+      message.success('✅ Đã phê duyệt lệnh sản xuất!');
+      queryClient.invalidateQueries({ queryKey: ['production-requests-list-unpaginated'] });
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Lỗi khi duyệt lệnh sản xuất!');
+    }
+  });
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleFinish = (values: any) => {
-    const rawLines: Record<string, unknown>[] = values.lines || [];
-    if (rawLines.length === 0) {
-      message.error('Vui lòng thêm ít nhất 1 dòng sản phẩm.');
+  // Approve All Mutation
+  const approveAllMutation = useMutation({
+    mutationFn: (dateStr: string) => productionRequestService.approveAll(dateStr),
+    onSuccess: (res) => {
+      const count = Array.isArray(res) ? res.length : '';
+      message.success(`✅ Đã duyệt toàn bộ ${count} lệnh sản xuất trong ngày!`);
+      queryClient.invalidateQueries({ queryKey: ['production-requests-list-unpaginated'] });
+    },
+    onError: (err: any) => {
+      message.error(err?.response?.data?.message || 'Lỗi khi duyệt toàn bộ phiếu!');
+    }
+  });
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
+  const handleSaveDaily = () => {
+    const validLines = dailyLines
+      .filter((l) => l.productId && (l.plannedQty ?? 0) > 0)
+      .map((l, idx) => ({
+        productId: l.productId,
+        plannedQty: Number(l.plannedQty),
+        sortOrder: l.sortOrder || idx + 1
+      }));
+
+    if (validLines.length === 0) {
+      message.warning('⚠️ Vui lòng nhập ít nhất 1 dòng sản phẩm có số lượng > 0!');
       return;
     }
 
-    const payload: ProductionRequestInput = {
-      productionType: values.productionType as ProductionType,
-      productionDate: (values.productionDate as dayjs.Dayjs).format('YYYY-MM-DD'),
-      note: values.note as string | undefined,
-      lines: rawLines.map((l, idx) => ({
-        productId: l.productId as string,
-        recipeId: l.recipeId as string | undefined,
-        plannedQty: l.plannedQty as number,
-        sortOrder: (l.sortOrder as number) ?? idx + 1,
-        note: l.note as string | undefined,
-      })),
-    };
-
-    mutation.mutate(payload);
+    createMutation.mutate({
+      productionType: dailyType,
+      productionDate: dailyDate.format('YYYY-MM-DD'),
+      note: dailyNote || undefined,
+      lines: validLines
+    }, {
+      onSuccess: () => {
+        // Reset form
+        setDailyLines([{ productId: '', plannedQty: undefined, sortOrder: 1 }]);
+        setDailyNote('');
+      }
+    });
   };
 
-  // ── Loading / Error states ────────────────────────────────────────────────────
+  const handleApproveAllDaily = () => {
+    const dateStr = dailyFilterDate.format('YYYY-MM-DD');
+    Modal.confirm({
+      title: '✅ Phê duyệt toàn bộ',
+      content: `Bạn có chắc chắn muốn duyệt tất cả lệnh sản xuất trong ngày ${dailyFilterDate.format('DD/MM/YYYY')}?`,
+      okText: 'Duyệt tất cả',
+      cancelText: 'Hủy',
+      onOk: () => approveAllMutation.mutate(dateStr)
+    });
+  };
 
-  if (isEdit && existingLoading) {
+  // ── Render Helpers ────────────────────────────────────────────────────────
+
+  const renderDetailTable = (record: ProductionRequestDetail) => {
+    const lines = record.lines || [];
+    const hasCompleted = lines.some((l: any) => l.lineStatus === 'COMPLETED');
+
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}>
-        <Spin size="large" />
+      <div style={{ padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+        {hasCompleted && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={
+              <span>
+                ⚠️ Có dòng sản phẩm đã hoàn thành. Hãy vào trang{' '}
+                <a onClick={() => navigate('/delivery')} style={{ fontWeight: 600, textDecoration: 'underline' }}>
+                  🚚 Giao nhận Bếp → Shop
+                </a>{' '}
+                để Shop xác nhận và chuyển kho (chọn ngày: <strong>{record.productionDate}</strong>).
+              </span>
+            }
+          />
+        )}
+        <Table
+          dataSource={lines}
+          rowKey="id"
+          pagination={false}
+          size="small"
+          columns={[
+            {
+              title: 'Sản phẩm / BTP',
+              key: 'product',
+              render: (_, l: any) => <strong>{l.product?.name || l.product?.key || '—'}</strong>
+            },
+            {
+              title: 'Đơn vị',
+              key: 'unit',
+              width: 80,
+              render: (_, l: any) => l.unit || l.product?.unit || '—'
+            },
+            {
+              title: 'Kế hoạch',
+              key: 'plannedQty',
+              align: 'right',
+              width: 100,
+              render: (_, l: any) => <span style={{ color: '#0284c7', fontWeight: 600 }}>{l.plannedQty}</span>
+            },
+            {
+              title: 'Bếp làm',
+              key: 'produced',
+              align: 'right',
+              width: 100,
+              render: (_, l: any) => l.deliveryRecord?.qtyProduced ?? '—'
+            },
+            {
+              title: 'Shop nhận',
+              key: 'received',
+              align: 'right',
+              width: 100,
+              render: (_, l: any) => l.deliveryRecord?.qtyReceived ?? '—'
+            },
+            {
+              title: 'Trạng thái line',
+              key: 'status',
+              width: 120,
+              render: (_, l: any) => renderStatusBadge(l.lineStatus)
+            }
+          ]}
+        />
       </div>
     );
-  }
+  };
 
-  if (isEdit && existingError) {
-    return (
-      <Alert type="error" showIcon
-        message="Không tải được lệnh sản xuất."
-        action={<Button onClick={() => navigate('/production/requests')}>Quay Lại</Button>}
-      />
-    );
-  }
-
-  // ── Render ────────────────────────────────────────────────────────────────────
+  const dailyColumns = [
+    {
+      title: 'Mã phiếu',
+      dataIndex: 'code',
+      key: 'code',
+      render: (code: string) => <strong style={{ color: '#0f172a' }}>{code || '—'}</strong>
+    },
+    {
+      title: 'Ngày SX',
+      dataIndex: 'productionDate',
+      key: 'productionDate',
+      width: 110,
+      render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '—'
+    },
+    {
+      title: 'Loại',
+      dataIndex: 'productionType',
+      key: 'productionType',
+      width: 100,
+      render: (t: string) => (
+        <Tag color={t === 'DAILY' ? 'blue' : t === 'ORDER' ? 'purple' : 'cyan'}>
+          {t}
+        </Tag>
+      )
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'approvalStatus',
+      key: 'approvalStatus',
+      width: 120,
+      render: (st: string) => renderStatusBadge(st)
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      width: 120,
+      render: (_, record: ProductionRequestDetail) => {
+        const canApprove = record.approvalStatus === 'DRAFT' || record.approvalStatus === 'PENDING_APPROVAL' || record.approvalStatus === 'PENDING';
+        return (
+          <Space>
+            {canApprove && (
+              <Tooltip title="Phê duyệt nhanh">
+                <Button
+                  type="primary"
+                  size="small"
+                  style={{ backgroundColor: '#10b981', borderColor: '#10b981' }}
+                  icon={<CheckCircleOutlined />}
+                  loading={approveMutation.isPending}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    approveMutation.mutate(record.id);
+                  }}
+                >
+                  Duyệt
+                </Button>
+              </Tooltip>
+            )}
+          </Space>
+        );
+      }
+    }
+  ];
 
   return (
-    <div>
-      {/* ── Page Header ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/production/requests')}>
-            Danh Sách Lệnh Sản Xuất
+    <div style={{ padding: '0 8px', maxWidth: 1600, margin: '0 auto' }}>
+      {/* Top Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Space align="center">
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/prod-requests')}>
+            Quay lại danh sách
           </Button>
-          <Divider type="vertical" />
-          <OrderedListOutlined style={{ fontSize: 20, color: '#722ed1' }} />
-          <Title level={4} style={{ margin: 0 }}>
-            {isEdit ? 'Chỉnh Sửa Lệnh Sản Xuất' : 'Tạo Lệnh Sản Xuất Mới'}
+          <Title level={3} style={{ margin: 0, color: '#1e293b' }}>
+            📋 Phiếu Sản Xuất (DAILY / ORDER)
           </Title>
-          {isEdit && existing?.code && (
-            <Text type="secondary" style={{ marginLeft: 8 }}>#{existing.code}</Text>
-          )}
         </Space>
         <Space>
-          <Button onClick={() => navigate('/production/requests')}>Huỷ</Button>
-          <Button
-            type="primary"
-            icon={<SaveOutlined />}
-            loading={mutation.isPending}
-            onClick={() => form.submit()}
-          >
-            {isEdit ? 'Lưu Cập Nhật' : 'Tạo Lệnh Sản Xuất'}
+          <Button icon={<UnorderedListOutlined />} onClick={() => navigate('/prod-requests')}>
+            Danh sách tổng hợp
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={() => refetchPRs()}>
+            Làm mới dữ liệu
           </Button>
         </Space>
       </div>
 
-      {/* ── Form ────────────────────────────────────────────────────────────── */}
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={handleFinish}
-        initialValues={{ productionType: 'DAILY', lines: [{ sortOrder: 1 }] }}
-      >
-        {/* Card 1: Thông Tin Chung */}
-        <Card title="Thông Tin Chung" style={{ marginBottom: 24 }}>
-          <Row gutter={24}>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="productionType"
-                label="Loại Sản Xuất"
-                rules={[{ required: true, message: 'Vui lòng chọn loại sản xuất' }]}
-              >
-                <Select placeholder="Chọn loại sản xuất">
-                  <Select.Option value="DAILY">🗓 Hàng Ngày (DAILY)</Select.Option>
-                  <Select.Option value="ORDER">📦 Theo Đơn (ORDER)</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="productionDate"
-                label="Ngày Sản Xuất"
-                rules={[{ required: true, message: 'Vui lòng chọn ngày sản xuất' }]}
-              >
-                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="note" label="Ghi Chú">
-                <Input placeholder="Ghi chú cho lệnh (không bắt buộc)..." />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Card>
-
-        {/* Card 2: Dòng Sản Phẩm */}
-        <Card
-          title="🔬 Dòng Sản Phẩm"
-          extra={<Text type="secondary">Thêm các sản phẩm cần sản xuất</Text>}
-          style={{ marginBottom: 24 }}
-        >
-          <Form.List
-            name="lines"
-            rules={[{
-              validator: async (_, names) => {
-                if (!names || names.length < 1)
-                  return Promise.reject(new Error('Cần ít nhất 1 dòng sản phẩm'));
-              },
-            }]}
+      {/* Main Content (2-Column Layout without Tabs) */}
+      <Row gutter={[20, 20]}>
+        {/* Left Col: Create DAILY / ORDER Form */}
+        <Col xs={24} lg={10} xl={9}>
+          <Card
+            title={<span style={{ fontSize: 16, color: '#1e293b' }}>✨ Tạo phiếu SX (DAILY / ORDER)</span>}
+            bordered={false}
+            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: 12 }}
           >
-            {(fields, { add, remove }, { errors }) => {
-              const columns = [
-                {
-                  title: '#',
-                  dataIndex: 'name',
-                  width: 50,
-                  render: (_: unknown, __: unknown, idx: number) => (
-                    <Text type="secondary">{idx + 1}</Text>
-                  ),
-                },
-                {
-                  title: 'Sản Phẩm *',
-                  dataIndex: 'name',
-                  render: (name: number, field: { key: number; name: number }) => (
-                    <Form.Item
-                      {...field}
-                      name={[name, 'productId']}
-                      rules={[{ required: true, message: 'Chọn sản phẩm' }]}
-                      style={{ margin: 0 }}
+            <Form layout="vertical">
+              <Row gutter={12}>
+                <Col span={12}>
+                  <Form.Item label={<span style={{ fontWeight: 600 }}>Loại lệnh *</span>}>
+                    <Select
+                      value={dailyType}
+                      onChange={(v) => setDailyType(v)}
+                      size="large"
+                    >
+                      <Option value="DAILY">DAILY — Theo kế hoạch</Option>
+                      <Option value="ORDER">ORDER — Đơn phát sinh</Option>
+                      <Option value="SEMI">SEMI — Bán thành phẩm</Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label={<span style={{ fontWeight: 600 }}>Ngày SX *</span>}>
+                    <DatePicker
+                      value={dailyDate}
+                      onChange={(d) => d && setDailyDate(d)}
+                      format="DD/MM/YYYY"
+                      size="large"
+                      style={{ width: '100%' }}
+                      allowClear={false}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Form.Item label="Ghi chú">
+                <Input.TextArea
+                  value={dailyNote}
+                  onChange={(e) => setDailyNote(e.target.value)}
+                  placeholder="Nhập ghi chú lệnh sản xuất nếu có..."
+                  rows={2}
+                />
+              </Form.Item>
+
+              {/* Product Lines Section */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontWeight: 600, color: '#334155', fontSize: 14 }}>
+                    📦 Danh sách dòng sản phẩm ({dailyLines.length})
+                  </span>
+                  <Button
+                    type="dashed"
+                    size="small"
+                    icon={<PlusOutlined />}
+                    onClick={() => setDailyLines([...dailyLines, { productId: '', plannedQty: undefined, sortOrder: dailyLines.length + 1 }])}
+                  >
+                    Thêm dòng
+                  </Button>
+                </div>
+
+                <div style={{ maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
+                  {dailyLines.map((line, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 100px 60px 32px',
+                        gap: 8,
+                        marginBottom: 10,
+                        alignItems: 'center',
+                        background: '#f8fafc',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #f1f5f9'
+                      }}
                     >
                       <Select
-                        size="small"
                         showSearch
-                        placeholder="Tìm và chọn sản phẩm..."
+                        placeholder="Chọn sản phẩm / BTP..."
+                        value={line.productId || undefined}
+                        onChange={(val) => {
+                          const newLines = [...dailyLines];
+                          newLines[idx].productId = val;
+                          setDailyLines(newLines);
+                        }}
+                        filterOption={(input, option) =>
+                          (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                        }
+                        options={productOptions}
                         loading={itemsLoading}
-                        options={itemOptions}
-                        filterOption={(input, opt) =>
-                          (opt?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                        }
-                        notFoundContent={itemsLoading ? <Spin size="small" /> : 'Không tìm thấy'}
                       />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Công Thức',
-                  dataIndex: 'name',
-                  width: 220,
-                  render: (name: number, field: { key: number; name: number }) => (
-                    <Form.Item
-                      {...field}
-                      name={[name, 'recipeId']}
-                      style={{ margin: 0 }}
-                    >
-                      <Select
-                        size="small"
-                        showSearch
-                        allowClear
-                        placeholder="Chọn công thức (tuỳ chọn)"
-                        loading={recipesLoading}
-                        options={recipeOptions}
-                        filterOption={(input, opt) =>
-                          (opt?.label as string)?.toLowerCase().includes(input.toLowerCase())
-                        }
-                        notFoundContent="Không có công thức"
+                      <InputNumber
+                        placeholder="Số lượng"
+                        min={0.5}
+                        step={0.5}
+                        value={line.plannedQty}
+                        onChange={(val) => {
+                          const newLines = [...dailyLines];
+                          newLines[idx].plannedQty = val || undefined;
+                          setDailyLines(newLines);
+                        }}
+                        style={{ width: '100%' }}
                       />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Số Lượng KH *',
-                  dataIndex: 'name',
-                  width: 140,
-                  render: (name: number, field: { key: number; name: number }) => (
-                    <Form.Item
-                      {...field}
-                      name={[name, 'plannedQty']}
-                      rules={[
-                        { required: true, message: 'Nhập số lượng' },
-                        { type: 'number' as const, min: 0.001, message: 'Phải > 0' },
-                      ]}
-                      style={{ margin: 0 }}
-                    >
-                      <InputNumber size="small" min={0.001} step={1} style={{ width: '100%' }} placeholder="0" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Thứ Tự',
-                  dataIndex: 'name',
-                  width: 90,
-                  render: (name: number, field: { key: number; name: number }) => (
-                    <Form.Item {...field} name={[name, 'sortOrder']} style={{ margin: 0 }}>
-                      <InputNumber size="small" min={1} style={{ width: '100%' }} placeholder="1" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: 'Ghi Chú',
-                  dataIndex: 'name',
-                  render: (name: number, field: { key: number; name: number }) => (
-                    <Form.Item {...field} name={[name, 'note']} style={{ margin: 0 }}>
-                      <Input size="small" placeholder="Ghi chú..." />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '',
-                  width: 50,
-                  dataIndex: 'name',
-                  render: (name: number) => (
-                    <Popconfirm
-                      title="Xoá dòng này?"
-                      onConfirm={() => remove(name)}
-                      okText="Xoá"
-                      cancelText="Huỷ"
-                      disabled={fields.length === 1}
-                    >
+                      <InputNumber
+                        placeholder="Sort"
+                        min={1}
+                        value={line.sortOrder}
+                        onChange={(val) => {
+                          const newLines = [...dailyLines];
+                          newLines[idx].sortOrder = val || idx + 1;
+                          setDailyLines(newLines);
+                        }}
+                        style={{ width: '100%' }}
+                      />
                       <Button
                         type="text"
                         danger
-                        size="small"
                         icon={<DeleteOutlined />}
-                        disabled={fields.length === 1}
+                        disabled={dailyLines.length === 1 && idx === 0 && !line.productId}
+                        onClick={() => {
+                          const newLines = dailyLines.filter((_, i) => i !== idx);
+                          setDailyLines(newLines.length ? newLines : [{ productId: '', plannedQty: undefined, sortOrder: 1 }]);
+                        }}
                       />
-                    </Popconfirm>
-                  ),
-                },
-              ];
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-              return (
-                <>
-                  <Table
-                    columns={columns}
-                    dataSource={fields}
-                    rowKey="key"
-                    pagination={false}
-                    size="small"
-                    bordered
-                    locale={{ emptyText: 'Chưa có dòng nào. Bấm "Thêm Dòng" để bắt đầu.' }}
+              <Button
+                type="primary"
+                icon={<SaveOutlined />}
+                size="large"
+                block
+                loading={createMutation.isPending}
+                onClick={handleSaveDaily}
+                style={{ marginTop: 12, height: 44, fontSize: 15, fontWeight: 600, background: '#0284c7' }}
+              >
+                Tạo phiếu sản xuất
+              </Button>
+            </Form>
+          </Card>
+        </Col>
+
+        {/* Right Col: DAILY / ORDER PR List */}
+        <Col xs={24} lg={14} xl={15}>
+          <Card
+            title={
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 16, color: '#1e293b' }}>📋 Danh sách phiếu SX trong ngày</span>
+                <Space>
+                  <DatePicker
+                    value={dailyFilterDate}
+                    onChange={(d) => d && setDailyFilterDate(d)}
+                    format="DD/MM/YYYY"
+                    allowClear={false}
                   />
-                  <Form.ErrorList errors={errors} />
                   <Button
-                    type="dashed"
-                    onClick={() => add({ sortOrder: fields.length + 1 })}
-                    block
-                    icon={<PlusOutlined />}
-                    style={{ marginTop: 8 }}
+                    type="primary"
+                    style={{ backgroundColor: '#10b981', borderColor: '#10b981', fontWeight: 600 }}
+                    icon={<CheckCircleOutlined />}
+                    loading={approveAllMutation.isPending}
+                    onClick={handleApproveAllDaily}
                   >
-                    Thêm Dòng Sản Phẩm
+                    ✅ Approve All
                   </Button>
-                </>
-              );
-            }}
-          </Form.List>
-        </Card>
-
-
-      </Form>
+                </Space>
+              </div>
+            }
+            bordered={false}
+            style={{ boxShadow: '0 4px 12px rgba(0,0,0,0.05)', borderRadius: 12 }}
+          >
+            <Table
+              dataSource={dailyPRList}
+              columns={dailyColumns}
+              rowKey="id"
+              loading={prListLoading}
+              pagination={{ pageSize: 10 }}
+              expandable={{
+                expandedRowRender: renderDetailTable,
+                expandRowByClick: true
+              }}
+              locale={{ emptyText: 'Chưa có phiếu sản xuất nào trong ngày này' }}
+            />
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

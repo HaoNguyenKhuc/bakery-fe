@@ -136,6 +136,32 @@ const productionRequestService = {
       `/api/v1/production-requests/${id}/lines/complete-batch`,
       lines,
     ),
+
+  /**
+   * Gợi ý số lượng Bán Thành Phẩm cần sản xuất trong ngày.
+   * GET /api/v1/production-requests/suggest-semi?semiItemId=...&date=...
+   */
+  suggestSemi: (semiItemId: string, date: string) =>
+    api.get<{ neededByPlan: number; kitchenStock: number; suggested: number; unit: string }>(
+      '/api/v1/production-requests/suggest-semi',
+      { semiItemId, date }
+    ),
+
+  /**
+   * Duyệt nhanh toàn bộ lệnh sản xuất trong ngày.
+   * POST /api/v1/production-requests/approve-all?date=...
+   */
+  approveAll: (date: string) =>
+    api.post<ProductionRequestDetail[]>(`/api/v1/production-requests/approve-all?date=${date}`),
+
+  /**
+   * Tạo phiếu xuất nguyên liệu (từ Kho Tổng -> Bếp) cho lệnh sản xuất BTP.
+   * POST /api/v1/production-requests/{id}/transfer-ingredients
+   */
+  transferIngredients: (id: string) =>
+    api.post<{ transferCode?: string; lineCount?: number; id?: string }>(
+      `/api/v1/production-requests/${id}/transfer-ingredients`
+    ),
 };
 
 export default productionRequestService;

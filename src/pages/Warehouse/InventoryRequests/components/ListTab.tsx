@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, Button, Input, Tag, Space, Typography, Badge, message, Popconfirm, Select, Card, Row, Col, Tabs } from 'antd';
-import { SearchOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { SearchOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import type { ColumnsType } from 'antd/es/table';
 import { transactionService, inventoryService } from '../../../../api/services';
@@ -45,10 +46,22 @@ const STATUS_COLOR: Record<string, string> = {
   REJECTED: 'red',
 };
 
-const ListTab: React.FC = () => {
+interface ListTabProps {
+  warehouseFilter?: { id?: string; code?: string; name?: string };
+}
+
+const ListTab: React.FC<ListTabProps> = ({ warehouseFilter }) => {
   const queryClient = useQueryClient();
-  const [selectedWarehouse, setSelectedWarehouse] = useState<string>('');
+  const navigate = useNavigate();
+  const { type = 'kho-chinh' } = useParams<{ type: string }>();
+  const [selectedWarehouse, setSelectedWarehouse] = useState<string>(warehouseFilter?.code || '');
   const [selectedStatus, setSelectedStatus] = useState<string>('PENDING_APPROVAL');
+
+  useEffect(() => {
+    if (warehouseFilter?.code !== undefined) {
+      setSelectedWarehouse(warehouseFilter.code);
+    }
+  }, [warehouseFilter?.code]);
 
   const [selectedRecord, setSelectedRecord] = useState<UnifiedTransactionResponse | null>(null);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
@@ -182,20 +195,17 @@ const ListTab: React.FC = () => {
 
   return (
     <Card bordered={false}>
-      <Tabs
-        className="nav-tabs-only"
-        activeKey={selectedWarehouse}
-        onChange={(k) => setSelectedWarehouse(k)}
-        items={[
-          { key: '', label: 'Tất cả kho' },
-          ...allWarehouses.map(w => ({ key: w?.code || '', label: w?.name || '' }))
-        ]}
-        tabBarExtraContent={
-          <Button icon={<SearchOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['inventory-requests'] })}>
-            Tải lại
-          </Button>
-        }
-      />
+      {!warehouseFilter && (
+        <Tabs
+          className="nav-tabs-only"
+          activeKey={selectedWarehouse}
+          onChange={(k) => setSelectedWarehouse(k)}
+          items={[
+            { key: '', label: 'Tất cả kho' },
+            ...allWarehouses.map(w => ({ key: w?.code || '', label: w?.name || '' }))
+          ]}
+        />
+      )}
 
       <Tabs
         className="nav-tabs-only"
@@ -203,13 +213,23 @@ const ListTab: React.FC = () => {
         onChange={(k) => setSelectedStatus(k)}
         type="card"
         size="small"
-        style={{ marginTop: 16, marginBottom: 16 }}
+        style={{ marginTop: warehouseFilter ? 0 : 16, marginBottom: 16 }}
         items={[
           { key: 'PENDING_APPROVAL', label: 'Chờ duyệt' },
           { key: 'APPROVED', label: 'Đã duyệt' },
           { key: 'DRAFT', label: 'Draft' },
           { key: 'REJECTED', label: 'Bị từ chối' }
         ]}
+        tabBarExtraContent={
+          <Space>
+            <Button icon={<SearchOutlined />} onClick={() => queryClient.invalidateQueries({ queryKey: ['inventory-requests'] })}>
+              Tải lại
+            </Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate(`/warehouse/${type}/phieu-kho/create`)}>
+              Tạo phiếu
+            </Button>
+          </Space>
+        }
       />
 
       <Table<UnifiedTransactionResponse>
