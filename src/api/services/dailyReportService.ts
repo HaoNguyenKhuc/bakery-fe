@@ -68,6 +68,36 @@ const dailyReportService = {
       `/api/v1/daily-reports/${id}/finalize`,
       null,
     ),
+
+  /**
+   * Lấy báo cáo theo ngày (không tạo mới nếu chưa có).
+   * GET /api/v1/daily-reports/by-date?reportDate=...
+   */
+  getByDate: (reportDate: string) =>
+    axiosClient.get<DailyReport, DailyReport>(
+      '/api/v1/daily-reports/by-date',
+      { params: { reportDate } },
+    ),
+
+  /**
+   * Lấy danh sách hủy bánh (sản phẩm có shelf_days = 0).
+   * GET /api/v1/daily-reports/{id}/cancel-list
+   */
+  getCancelList: (id: string) =>
+    axiosClient.get<DailyReportLine[], DailyReportLine[]>(
+      `/api/v1/daily-reports/${id}/cancel-list`,
+    ),
+
+  /**
+   * Nhập số lượng hủy cho 1 item.
+   * POST /api/v1/daily-reports/{id}/cancel?itemId=...&qtyCancelled=...
+   */
+  updateCancel: (id: string, itemId: string, qtyCancelled: number) =>
+    axiosClient.post<DailyReportLine, DailyReportLine>(
+      `/api/v1/daily-reports/${id}/cancel`,
+      null,
+      { params: { itemId, qtyCancelled } },
+    ),
 };
 
 export default dailyReportService;

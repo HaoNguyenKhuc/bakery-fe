@@ -275,6 +275,13 @@ const ProductionRequestList: React.FC = () => {
       retry: false,
     });
 
+  const { data: draftData, isLoading: draftLoading, isError: draftError, refetch: refetchDraft } =
+    useQuery({
+      queryKey: ['production-requests', 'DRAFT', filterDate, filterType],
+      queryFn: () => productionRequestService.list(buildParams('DRAFT')),
+      retry: false,
+    });
+
   const { data: rejectedData, isLoading: rejectedLoading, isError: rejectedError, refetch: refetchRejected } =
     useQuery({
       queryKey: ['production-requests', 'REJECTED', filterDate, filterType],
@@ -283,7 +290,7 @@ const ProductionRequestList: React.FC = () => {
     });
 
   const approvedList = toArray<ProductionRequestDetail>(approvedData);
-  const pendingList = toArray<ProductionRequestDetail>(pendingData);
+  const pendingList = [...toArray<ProductionRequestDetail>(draftData), ...toArray<ProductionRequestDetail>(pendingData)];
   const rejectedList = toArray<ProductionRequestDetail>(rejectedData);
 
   const filtered = (list: ProductionRequestDetail[]) =>
@@ -294,7 +301,7 @@ const ProductionRequestList: React.FC = () => {
       )
       : list;
 
-  const handleRefreshAll = () => { refetchApproved(); refetchPending(); refetchRejected(); };
+  const handleRefreshAll = () => { refetchApproved(); refetchPending(); refetchDraft(); refetchRejected(); };
 
   // ── Mutations ─────────────────────────────────────────────────────────────────
 
@@ -464,7 +471,7 @@ const ProductionRequestList: React.FC = () => {
       children: (
         <Table<ProductionRequestDetail>
           columns={pendingColumns} dataSource={filtered(pendingList)}
-          loading={pendingLoading} rowKey="id" size="middle"
+          loading={pendingLoading || draftLoading} rowKey="id" size="middle"
           pagination={{ pageSize: 8 }}
         />
       ),
@@ -528,7 +535,7 @@ const ProductionRequestList: React.FC = () => {
           <Button
             icon={<ReloadOutlined />}
             onClick={handleRefreshAll}
-            loading={approvedLoading || pendingLoading || rejectedLoading}
+            loading={approvedLoading || pendingLoading || draftLoading || rejectedLoading}
           >
             Làm Mới
           </Button>
@@ -550,10 +557,10 @@ const ProductionRequestList: React.FC = () => {
           action={<Button size="small" onClick={() => refetchApproved()}>Thử lại</Button>}
         />
       )}
-      {pendingError && (
+      {(pendingError || draftError) && (
         <Alert type="warning" showIcon message="Không tải được danh sách lệnh chờ duyệt."
           style={{ marginBottom: 12 }}
-          action={<Button size="small" onClick={() => refetchPending()}>Thử lại</Button>}
+          action={<Button size="small" onClick={() => { refetchPending(); refetchDraft(); }}>Thử lại</Button>}
         />
       )}
       {rejectedError && (

@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useWarehouseStore } from '../../../store';
 import WarehouseSummaryTab from '../components/WarehouseSummaryTab';
 import InventoryRequests from '../InventoryRequests';
-import POSSales from '../../Reports/POSSales';
+import StoreDailyReport from '../StoreDailyReport';
 import KitchenDelivery from '../../Production/KitchenDelivery';
 
 const { Title, Text } = Typography;
@@ -46,12 +46,14 @@ const MainWarehouse: React.FC = () => {
     ];
   } else if (type === 'cua-hang') {
     headerTitle = '🛍️ Cửa Hàng (STORE)';
-    headerDesc = 'Quản lý tồn kho, phiếu kho, báo cáo doanh thu ngày và giao nhận tại cửa hàng';
+    headerDesc = 'Quản lý tồn kho, phiếu kho và báo cáo ngày tại cửa hàng';
     tabItems = [
       {
         key: 'ton-kho',
         label: '📦 Tồn Kho',
-        children: activeStore ? <WarehouseSummaryTab warehouse={activeStore} /> : <Empty description="Chưa có cửa hàng nào" />,
+        children: activeStore
+          ? <WarehouseSummaryTab warehouse={activeStore} />
+          : <Empty description="Chưa có cửa hàng nào" />,
       },
       {
         key: 'phieu-kho',
@@ -61,7 +63,7 @@ const MainWarehouse: React.FC = () => {
       {
         key: 'bao-cao-ngay',
         label: '📊 Báo Cáo Ngày',
-        children: <POSSales />,
+        children: <StoreDailyReport />,
       },
       {
         key: 'giao-nhan',
