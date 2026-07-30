@@ -6,6 +6,7 @@ import { ArrowLeftOutlined, SaveOutlined, PlusOutlined, DeleteOutlined } from '@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { recipeService, itemService } from '../../../api/services';
+import unitService from '../../../api/services/unitService';
 import type { RecipeRequest, RecipeLineRequest } from '../../../types';
 import type { ColumnsType } from 'antd/es/table';
 import { Table, Popconfirm, Alert } from 'antd';
@@ -35,6 +36,11 @@ const RecipeForm: React.FC = () => {
   
   const allItems = Array.isArray(allItemsData) ? allItemsData : ((allItemsData as any)?.data || []);
   const product = allItems.find((i: any) => i.id === productId);
+
+  const { data: units = [] } = useQuery({
+    queryKey: ['units'],
+    queryFn: () => unitService.getAll(),
+  });
 
   useEffect(() => {
     if (!productId) {
@@ -146,11 +152,17 @@ const RecipeForm: React.FC = () => {
       dataIndex: 'unit',
       width: 120,
       render: (v: string, record) => (
-        <Input
+        <Select
           size="small"
           placeholder="Đơn vị..."
-          value={v}
-          onChange={(e) => updateLine(record.rowKey, { unit: e.target.value })}
+          value={v || undefined}
+          onChange={(val) => updateLine(record.rowKey, { unit: val })}
+          style={{ width: '100%' }}
+          showSearch
+          options={(units as any[]).map((u: any) => ({
+            value: u.code,
+            label: `${u.code} — ${u.name}`,
+          }))}
         />
       ),
     },

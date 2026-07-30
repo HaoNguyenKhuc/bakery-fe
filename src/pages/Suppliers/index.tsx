@@ -140,7 +140,7 @@ const SuppliersPage: React.FC = () => {
                 <Col span={12}>
                   <Form.Item
                     name="code"
-                    label="Code"
+                    label="Mã"
                     rules={[{ required: true, message: 'Nhập code' }]}
                   >
                     <Input placeholder="VD: NCC_01" />

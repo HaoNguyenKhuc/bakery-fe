@@ -216,7 +216,7 @@ const UsersPage: React.FC = () => {
                 <Input placeholder="Nguyễn Văn A" />
               </Form.Item>
 
-              <Form.Item name="roleId" label="Role">
+              <Form.Item name="roleId" label="Vai trò">
                 <Select
                   placeholder="— Chọn role —"
                   options={roleOptions}

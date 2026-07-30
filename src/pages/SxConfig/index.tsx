@@ -128,7 +128,7 @@ const ProductionConfig: React.FC = () => {
                       ),
                     },
                     {
-                      title: 'Target WD',
+                      title: 'Mục tiêu T2-T6',
                       dataIndex: 'group',
                       align: 'center',
                       render: (g, row) => ({
@@ -137,7 +137,7 @@ const ProductionConfig: React.FC = () => {
                       }),
                     },
                     {
-                      title: 'Target WE',
+                      title: 'Mục tiêu T7-CN',
                       dataIndex: 'group',
                       align: 'center',
                       render: (g, row) => ({
@@ -284,7 +284,7 @@ const ProductionConfig: React.FC = () => {
                       ),
                     },
                     {
-                      title: 'WD rules',
+                      title: 'Quy tắc T2-T6',
                       align: 'center',
                       render: (_, row) => {
                         const count = row.rules.filter(r => r.dayType === 'WEEKDAY').length;
@@ -292,7 +292,7 @@ const ProductionConfig: React.FC = () => {
                       },
                     },
                     {
-                      title: 'WE rules',
+                      title: 'Quy tắc T7-CN',
                       align: 'center',
                       render: (_, row) => {
                         const count = row.rules.filter(r => r.dayType === 'WEEKEND').length;
@@ -300,7 +300,7 @@ const ProductionConfig: React.FC = () => {
                       },
                     },
                     {
-                      title: 'Rule đầu tiên (WD)',
+                      title: 'Quy tắc đầu tiên (T2-T6)',
                       render: (_, row) => {
                         const first = row.rules.filter(r => r.dayType === 'WEEKDAY')[0];
                         if (!first) return <span style={{ color: 'var(--pp-ink-3)' }}>—</span>;

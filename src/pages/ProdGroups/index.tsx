@@ -177,7 +177,7 @@ const ProductionGroups: React.FC = () => {
   // ── Table columns ─────────────────────────────────────────────────────────────
   const columns = [
     {
-      title: 'Code',
+      title: 'Mã',
       dataIndex: 'code',
       width: 120,
       render: (v: string) => (
@@ -198,7 +198,7 @@ const ProductionGroups: React.FC = () => {
       render: (v: string) => <TypeTag type={v} />,
     },
     {
-      title: 'Item Group',
+      title: 'Nhóm mặt hàng',
       dataIndex: 'itemGroup',
       width: 130,
       render: (v: any) => v
@@ -206,7 +206,7 @@ const ProductionGroups: React.FC = () => {
         : <span style={{ color: 'var(--pp-ink-3)' }}>—</span>,
     },
     {
-      title: 'Target WD / WE',
+      title: 'Mục tiêu T2-T6 / T7-CN',
       width: 130,
       render: (_: any, r: ProductionGroup) =>
         r.groupType === 'FREE_GROUP'
@@ -390,7 +390,7 @@ const ProductionGroups: React.FC = () => {
           <Form form={form} layout="vertical" onFinish={handleFinish} initialValues={{ groupType: 'FREE_GROUP' }}>
             <Row gutter={16}>
               <Col xs={24} md={6}>
-                <Form.Item name="code" label="Code" rules={[{ required: true, message: 'Bắt buộc' }]}>
+                <Form.Item name="code" label="Mã" rules={[{ required: true, message: 'Bắt buộc' }]}>
                   <Input placeholder="VD: BANH_BAP" disabled={!!editingId} style={{ fontFamily: 'var(--pp-font-mono)' }} />
                 </Form.Item>
               </Col>
@@ -408,7 +408,7 @@ const ProductionGroups: React.FC = () => {
                 </Form.Item>
               </Col>
               <Col xs={24} md={5}>
-                <Form.Item name="itemGroupId" label="Item Group">
+                <Form.Item name="itemGroupId" label="Nhóm mặt hàng">
                   <Select placeholder="-- Không có --" allowClear
                     options={itemGroups.map((g: any) => ({ label: `${g.code} — ${g.name}`, value: g.id }))}
                   />
@@ -419,12 +419,12 @@ const ProductionGroups: React.FC = () => {
             {groupType === 'FREE_GROUP' && (
               <Row gutter={16}>
                 <Col xs={24} md={6}>
-                  <Form.Item name="targetWeekday" label="Target Weekday">
+                  <Form.Item name="targetWeekday" label="Mục tiêu ngày thường">
                     <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 40" />
                   </Form.Item>
                 </Col>
                 <Col xs={24} md={6}>
-                  <Form.Item name="targetWeekend" label="Target Weekend">
+                  <Form.Item name="targetWeekend" label="Mục tiêu cuối tuần">
                     <InputNumber style={{ width: '100%' }} min={0} placeholder="VD: 50" />
                   </Form.Item>
                 </Col>

@@ -157,35 +157,36 @@ const UserRolesPage: React.FC = () => {
   // Table columns
   const columns: ColumnsType<UserRole> = [
     {
-      title: 'Role Code',
+      title: 'Mã vai trò',
       dataIndex: 'roleCode',
       key: 'roleCode',
       width: 180,
       render: (text: string) => <Text style={{ fontFamily: 'monospace' }}>{text}</Text>,
     },
     {
-      title: 'Role Name',
+      title: 'Tên vai trò',
       dataIndex: 'roleName',
       key: 'roleName',
       width: 220,
       render: (text: string) => <Text strong>{text}</Text>,
     },
     {
-      title: 'Description',
+      title: 'Mô tả',
       dataIndex: 'description',
       key: 'description',
       ellipsis: true,
       render: (text: string) => <Text type="secondary">{text || '—'}</Text>,
     },
     {
-      title: 'Status',
+      title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       width: 120,
       align: 'center',
-      render: (status: RoleStatus) => (
-        <Tag color={statusConfig[status]?.color || 'default'}>{status}</Tag>
-      ),
+      render: (status: RoleStatus) => {
+        const statusLabel: Record<RoleStatus, string> = { Active: 'Hoạt động', Pending: 'Chờ duyệt', Rejected: 'Từ chối' };
+        return <Tag color={statusConfig[status]?.color || 'default'}>{statusLabel[status] ?? status}</Tag>;
+      },
     },
     {
       title: '',
@@ -213,13 +214,13 @@ const UserRolesPage: React.FC = () => {
   const tabItems = [
     {
       key: 'Active',
-      label: 'Active',
+      label: 'Hoạt động',
     },
     {
       key: 'Pending',
       label: (
         <Space>
-          Pending
+          Chờ duyệt
           {counts.Pending > 0 && (
             <Badge
               count={counts.Pending}
@@ -232,7 +233,7 @@ const UserRolesPage: React.FC = () => {
     },
     {
       key: 'Rejected',
-      label: 'Rejected',
+      label: 'Từ chối',
     },
   ];
 
@@ -240,19 +241,19 @@ const UserRolesPage: React.FC = () => {
     <div>
       {/* Breadcrumb text */}
       <Text type="secondary" style={{ fontSize: 13 }}>
-        Cài Đặt / Phân Quyền / User Role
+        Cài Đặt / Phân Quyền / Vai Trò Người Dùng
       </Text>
 
       {/* Page Header */}
       <Row justify="space-between" align="middle" style={{ marginTop: 4, marginBottom: 24 }}>
         <Col>
           <Title level={3} style={{ margin: 0 }}>
-            User Role
+            Vai Trò Người Dùng
           </Title>
         </Col>
         <Col>
           <Button type="primary" icon={<PlusOutlined />}>
-            Add Role
+            Thêm vai trò
           </Button>
         </Col>
       </Row>
@@ -277,9 +278,9 @@ const UserRolesPage: React.FC = () => {
           />
 
           <Space style={{ paddingBottom: 12 }}>
-            <Button icon={<FilterOutlined />}>Filter</Button>
+            <Button icon={<FilterOutlined />}>Lọc</Button>
             <Input
-              placeholder="Search..."
+              placeholder="Tìm kiếm..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               style={{ width: 200 }}
               value={searchText}

@@ -456,7 +456,7 @@ const ProductionRequestForm: React.FC = () => {
                         style={{ width: '100%' }}
                       />
                       <InputNumber
-                        placeholder="Sort"
+                        placeholder="Thứ tự"
                         min={1}
                         value={line.sortOrder}
                         onChange={(val) => {

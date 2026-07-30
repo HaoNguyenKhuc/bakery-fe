@@ -10,6 +10,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemService, recipeService, itemGroupService, masterService } from '../../../api/services';
+import unitService from '../../../api/services/unitService';
 import type { ProductRequest } from '../../../types';
 
 const { Title, Text } = Typography;
@@ -45,11 +46,11 @@ const ProductForm: React.FC = () => {
   });
   const itemGroups = extractArray(itemGroupsData);
 
-  const { data: unitsData } = useQuery({
-    queryKey: ['codeValues', 'UNIT'],
-    queryFn: () => masterService.getCodeValues('UNIT'),
+  const { data: unitsData = [] } = useQuery({
+    queryKey: ['units'],
+    queryFn: () => unitService.getAll(),
   });
-  const units = extractArray(unitsData);
+  const units = unitsData;
 
   const { data: itemData, isLoading: loadingItem } = useQuery({
     queryKey: ['item', id],
@@ -200,7 +201,7 @@ const ProductForm: React.FC = () => {
               </Form.Item>
             </Col>
             <Col xs={24} md={14}>
-              <Form.Item name="itemGroupId" label="Item Group">
+              <Form.Item name="itemGroupId" label="Nhóm mặt hàng">
                 <Select
                   placeholder="-- Không có --"
                   allowClear
@@ -220,7 +221,7 @@ const ProductForm: React.FC = () => {
             <Col xs={24} md={10}>
               <Form.Item
                 name="code"
-                label="Code"
+                label="Mã"
                 rules={[
                   { required: true, message: 'Vui lòng nhập mã' },
                   { max: 50, message: 'Tối đa 50 ký tự' },
@@ -255,9 +256,8 @@ const ProductForm: React.FC = () => {
                   placeholder="-- Chọn đơn vị --"
                   showSearch
                   optionFilterProp="label"
-                  loading={!unitsData}
                   options={units.map((u: any) => ({
-                    label: `${u.code} - ${u.name}`,
+                    label: `${u.code} — ${u.name}`,
                     value: u.code,
                   }))}
                 />
@@ -285,8 +285,8 @@ const ProductForm: React.FC = () => {
                   <Col xs={24} md={12}>
                     <Form.Item
                       name="unitSize"
-                      label="Unit size"
-                      rules={[{ required: true, message: 'Nhập unit size' }]}
+                      label="Kích cỡ"
+                      rules={[{ required: true, message: 'Nhập kích cỡ' }]}
                     >
                       <InputNumber
                         min={0}
@@ -441,7 +441,7 @@ const ProductForm: React.FC = () => {
                         ),
                       },
                       {
-                        title: 'Sort',
+                        title: 'Thứ tự',
                         dataIndex: 'name',
                         width: 90,
                         render: (name: number, field: any) => (

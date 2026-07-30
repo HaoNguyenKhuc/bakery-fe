@@ -113,9 +113,9 @@ const dummyUsers: UserProfile[] = [
 // --- Status config ---
 
 const statusConfig: Record<UserStatus, { color: string; label: string }> = {
-  ACTIVE: { color: 'green', label: 'ACTIVE' },
-  PENDING: { color: 'orange', label: 'PENDING' },
-  REJECTED: { color: 'red', label: 'REJECTED' },
+  ACTIVE: { color: 'green', label: 'Hoạt động' },
+  PENDING: { color: 'orange', label: 'Chờ duyệt' },
+  REJECTED: { color: 'red', label: 'Từ chối' },
 };
 
 // --- Mapping tab key to status ---
@@ -191,7 +191,7 @@ const UserProfilesPage: React.FC = () => {
   // Columns
   const columns: ColumnsType<UserProfile> = [
     {
-      title: 'Global User ID',
+      title: 'ID người dùng toàn cục',
       dataIndex: 'globalUserId',
       key: 'globalUserId',
       width: 280,
@@ -203,7 +203,7 @@ const UserProfilesPage: React.FC = () => {
       ),
     },
     {
-      title: 'Identity ID',
+      title: 'ID định danh',
       dataIndex: 'identityId',
       key: 'identityId',
       width: 300,
@@ -213,26 +213,26 @@ const UserProfilesPage: React.FC = () => {
       ),
     },
     {
-      title: 'User Email',
+      title: 'Email',
       dataIndex: 'userEmail',
       key: 'userEmail',
       width: 220,
       ellipsis: true,
     },
     {
-      title: 'Profile Name',
+      title: 'Tên hồ sơ',
       dataIndex: 'profileName',
       key: 'profileName',
       width: 150,
     },
     {
-      title: 'User Roles',
+      title: 'Vai trò',
       dataIndex: 'userRole',
       key: 'userRole',
       width: 160,
     },
     {
-      title: 'User Status',
+      title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
       width: 120,
@@ -269,13 +269,13 @@ const UserProfilesPage: React.FC = () => {
   const tabItems = [
     {
       key: 'Active',
-      label: 'Active',
+      label: 'Hoạt động',
     },
     {
       key: 'Pending',
       label: (
         <Space>
-          Pending
+          Chờ duyệt
           {counts.Pending > 0 && (
             <Badge
               count={counts.Pending}
@@ -288,7 +288,7 @@ const UserProfilesPage: React.FC = () => {
     },
     {
       key: 'Rejected',
-      label: 'Rejected',
+      label: 'Từ chối',
     },
   ];
 
@@ -296,19 +296,19 @@ const UserProfilesPage: React.FC = () => {
     <div>
       {/* Breadcrumb text */}
       <Text type="secondary" style={{ fontSize: 13 }}>
-        Cài Đặt / Phân Quyền / User Profiles
+        Cài Đặt / Phân Quyền / Hồ Sơ Người Dùng
       </Text>
 
       {/* Header */}
       <Row justify="space-between" align="middle" style={{ marginTop: 4, marginBottom: 24 }}>
         <Col>
           <Title level={3} style={{ margin: 0 }}>
-            User Profiles
+            Hồ Sơ Người Dùng
           </Title>
         </Col>
         <Col>
           <Button type="primary" icon={<PlusOutlined />}>
-            Create User Profile
+            Thêm hồ sơ
           </Button>
         </Col>
       </Row>
@@ -333,9 +333,9 @@ const UserProfilesPage: React.FC = () => {
           />
 
           <Space style={{ paddingBottom: 12 }}>
-            <Button icon={<FilterOutlined />}>Filter</Button>
+            <Button icon={<FilterOutlined />}>Lọc</Button>
             <Input
-              placeholder="Search..."
+              placeholder="Tìm kiếm..."
               prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
               style={{ width: 200 }}
               value={searchText}

@@ -118,7 +118,7 @@ const ThresholdRules: React.FC = () => {
       ),
     },
     {
-      title: 'Weekday',
+      title: 'Ngày thường',
       align: 'center' as const,
       width: 100,
       render: (_: any, r: any) => {
@@ -127,7 +127,7 @@ const ThresholdRules: React.FC = () => {
       },
     },
     {
-      title: 'Weekend',
+      title: 'Cuối tuần',
       align: 'center' as const,
       width: 100,
       render: (_: any, r: any) => {
@@ -390,8 +390,8 @@ const ItemRuleEditor: React.FC<{
                     <div key={key} style={{ display: 'grid', gridTemplateColumns: '120px 80px 100px 90px 140px 90px 40px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
                       <Form.Item {...rest} name={[name, 'dayType']} noStyle>
                         <Select size="small" style={{ width: '100%' }}>
-                          <Select.Option value="WEEKDAY">Weekday</Select.Option>
-                          <Select.Option value="WEEKEND">Weekend</Select.Option>
+                          <Select.Option value="WEEKDAY">Ngày thường</Select.Option>
+                          <Select.Option value="WEEKEND">Cuối tuần</Select.Option>
                         </Select>
                       </Form.Item>
                       <Form.Item {...rest} name={[name, 'sortOrder']} noStyle>

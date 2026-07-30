@@ -50,6 +50,7 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/suppliers': 'Nhà Cung Cấp',
   '/product-mapping': 'Product Mapping',
   '/item-groups': 'Item Groups',
+  '/units': 'Đơn Vị Tính',
   '/sx-config': 'Cấu Hình Sản Xuất',
   '/prod-groups': 'Production Groups',
   '/threshold-rules': 'Threshold Rules',
@@ -90,6 +91,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: '/suppliers',       label: '🏭 Nhà cung cấp',  screenCode: 'SUPPLIERS' },
       { key: '/product-mapping', label: '🔗 Product Mapping', screenCode: 'PRODUCT_MAPPING' },
       { key: '/item-groups',     label: '🏠 Item Groups',   screenCode: 'ITEM_GROUPS' },
+      { key: '/units',           label: '📐 Đơn vị tính',  screenCode: 'UNITS' },
     ],
   },
   {
@@ -333,7 +335,7 @@ const MainLayout: React.FC = () => {
           onClick={() => navigate('/products')}
         >
           <span className="sidebar-logo-icon">🥐</span>
-          {!collapsed && <span className="sidebar-logo-text">Bakery Dev</span>}
+          {!collapsed && <span className="sidebar-logo-text">Hệ Thống Quản Lý</span>}
         </div>
 
         {/* Custom Navigation Tree Menu matching dev-ui.html */}

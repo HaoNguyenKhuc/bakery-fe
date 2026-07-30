@@ -227,7 +227,7 @@ const ProductList: React.FC = () => {
       ),
     }] : []),
     {
-      title: 'Code',
+      title: 'Mã',
       dataIndex: 'code',
       key: 'code',
       width: 200,
@@ -255,7 +255,7 @@ const ProductList: React.FC = () => {
       render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
     },
     {
-      title: 'Status',
+      title: 'Trạng thái',
       dataIndex: 'approvalStatus',
       key: 'approvalStatus',
       width: 110,

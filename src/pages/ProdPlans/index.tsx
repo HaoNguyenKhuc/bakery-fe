@@ -68,7 +68,7 @@ const DailyPlan: React.FC = () => {
   const generateMutation = useMutation({
     mutationFn: (date: string) => productionService.generatePlan(date),
     onSuccess: () => {
-      message.success('Đã tạo kế hoạch DRAFT');
+      message.success('Đã tạo kế hoạch Nháp');
       queryClient.invalidateQueries({ queryKey: ['production-plans', 'by-date', selectedDate] });
     },
     onError: () => message.error('Không thể tạo kế hoạch'),
@@ -94,7 +94,7 @@ const DailyPlan: React.FC = () => {
   const regenerateMutation = useMutation({
     mutationFn: (id: string) => productionService.regeneratePlan(id),
     onSuccess: () => {
-      message.success('Đã tạo lại kế hoạch DRAFT');
+      message.success('Đã tạo lại kế hoạch Nháp');
       queryClient.invalidateQueries({ queryKey: ['production-plans', 'by-date', selectedDate] });
     },
   });
@@ -397,7 +397,7 @@ const DailyPlan: React.FC = () => {
                 <Popconfirm title="Tạo lại kế hoạch mới?" onConfirm={() => regenerateMutation.mutate(actualPlan.id)}>
                   <button className="pp-btn pp-btn--ghost" disabled={regenerateMutation.isPending}>
                     {regenerateMutation.isPending ? <Spin size="small" /> : <ReloadOutlined />}
-                    Tạo lại DRAFT
+                    Tạo lại Nháp
                   </button>
                 </Popconfirm>
               )}

@@ -69,7 +69,7 @@ const ItemGroupList: React.FC = () => {
 
   const columns: ColumnsType<ItemGroup> = [
     {
-      title: 'Code',
+      title: 'Mã',
       dataIndex: 'code',
       key: 'code',
       width: 150,
@@ -81,7 +81,7 @@ const ItemGroupList: React.FC = () => {
       key: 'name',
     },
     {
-      title: 'Sort',
+      title: 'Thứ tự',
       dataIndex: 'sortOrder',
       key: 'sortOrder',
       width: 100,
@@ -137,7 +137,7 @@ const ItemGroupList: React.FC = () => {
             >
               <Form.Item
                 name="code"
-                label="Code"
+                label="Mã"
                 rules={[
                   { required: true, message: 'Vui lòng nhập Code!' },
                   { whitespace: true, message: 'Code không được chỉ chứa khoảng trắng!' }
@@ -159,7 +159,7 @@ const ItemGroupList: React.FC = () => {
 
               <Form.Item
                 name="sortOrder"
-                label="Sort"
+                label="Thứ tự"
                 rules={[{ required: true, message: 'Vui lòng nhập thứ tự sort!' }]}
               >
                 <InputNumber min={0} style={{ width: '100%' }} />

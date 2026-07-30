@@ -234,7 +234,7 @@ const RolesPage: React.FC = () => {
             <Form form={form} layout="vertical" size="middle">
               <Form.Item
                 name="code"
-                label="Code *"
+                label="Mã *"
                 rules={[{ required: true, message: 'Bắt buộc' }]}
               >
                 <Input placeholder="VD: ADMIN, KITCHEN, SHOP" disabled={!!editingRole} />
