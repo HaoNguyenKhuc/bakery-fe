@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  Card, Table, Button, Modal, Form, Input, InputNumber,
+  Card, Table, Button, Modal, Form, Input, InputNumber, Select,
   Space, Typography, Divider, Popconfirm, message, Tag, Tooltip,
 } from 'antd';
 import {
@@ -126,11 +126,14 @@ const ConversionModal: React.FC<ConversionModalProps> = ({
               label="Từ đơn vị"
               rules={[{ required: true, message: 'Chọn đơn vị nguồn' }]}
             >
-              <Input
-                placeholder="G"
-                maxLength={20}
-                style={{ textTransform: 'uppercase' }}
+              <Select
+                placeholder="Chọn đơn vị nguồn..."
+                showSearch
                 onChange={updatePreview}
+                options={units.map((u) => ({
+                  value: u.code,
+                  label: `${u.code} — ${u.name}`,
+                }))}
               />
             </Form.Item>
             <Form.Item
@@ -138,11 +141,14 @@ const ConversionModal: React.FC<ConversionModalProps> = ({
               label="Sang đơn vị"
               rules={[{ required: true, message: 'Chọn đơn vị đích' }]}
             >
-              <Input
-                placeholder="KG"
-                maxLength={20}
-                style={{ textTransform: 'uppercase' }}
+              <Select
+                placeholder="Chọn đơn vị đích..."
+                showSearch
                 onChange={updatePreview}
+                options={units.map((u) => ({
+                  value: u.code,
+                  label: `${u.code} — ${u.name}`,
+                }))}
               />
             </Form.Item>
           </>
