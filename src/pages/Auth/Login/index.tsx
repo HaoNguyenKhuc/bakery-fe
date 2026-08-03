@@ -268,9 +268,8 @@ const Login: React.FC = () => {
                     onClick={() => fillDevCredentials(account)}
                     style={{
                       padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
-                      border: `2px solid ${
-                        selectedDev.mockRole === account.mockRole ? account.color : 'rgba(255,255,255,0.1)'
-                      }`,
+                      border: `2px solid ${selectedDev.mockRole === account.mockRole ? account.color : 'rgba(255,255,255,0.1)'
+                        }`,
                       background: selectedDev.mockRole === account.mockRole
                         ? `${account.color}20`
                         : 'rgba(255,255,255,0.04)',
@@ -407,7 +406,7 @@ const Login: React.FC = () => {
           )}
 
           {/* Divider + Dev Mode toggle (chỉ trong development) */}
-          {import.meta.env.DEV && (
+          {/* {import.meta.env.DEV && (
             <>
               <Divider style={{ borderColor: 'rgba(255,255,255,0.08)', margin: '20px 0' }}>
                 <Text style={{ color: 'rgba(255,255,255,0.25)', fontSize: 12 }}>hoặc</Text>
@@ -427,7 +426,7 @@ const Login: React.FC = () => {
                 {devMode ? 'Dùng Login thật' : 'Dev Mode (Bypass API)'}
               </Button>
             </>
-          )}
+          )} */}
         </Card>
 
         {/* Footer note */}

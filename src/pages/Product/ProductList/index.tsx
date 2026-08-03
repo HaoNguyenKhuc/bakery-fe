@@ -220,11 +220,12 @@ const ProductList: React.FC = () => {
       title: 'Nhóm',
       key: 'itemGroup',
       width: 140,
-      render: (_: unknown, record: Item) => (
-        record.itemGroup?.value
-          ? <Text style={{ color: '#2563eb', fontWeight: 500 }}>{record.itemGroup.value}</Text>
-          : <Text type="secondary">—</Text>
-      ),
+      render: (_: unknown, record: Item) => {
+        const groupName = record.itemGroup?.name || record.itemGroup?.value;
+        return groupName
+          ? <Text style={{ color: '#2563eb', fontWeight: 500 }}>{groupName}</Text>
+          : <Text type="secondary">—</Text>;
+      },
     }] : []),
     {
       title: 'Mã',

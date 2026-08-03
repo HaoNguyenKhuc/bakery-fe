@@ -24,7 +24,8 @@ export type EntityStatus = 'ACTIVE' | 'INACTIVE';
 /** Generic key-value reference returned by backend for FK fields */
 export interface ReferenceValue {
   key: string;   // e.g. code
-  value: string; // e.g. name
+  value?: string; // e.g. name
+  name?: string;
 }
 
 // ─────────────────────────────────────────────
