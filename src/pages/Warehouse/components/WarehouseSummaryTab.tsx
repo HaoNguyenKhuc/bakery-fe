@@ -72,6 +72,7 @@ const WarehouseSummaryTab: React.FC<Props> = ({ warehouse }) => {
         loading={stockLoading}
         rowKey={(r) => r.item.key}
         size="middle"
+        scroll={{ x: 500 }}
         pagination={{ pageSize: 15, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} mặt hàng` }}
         locale={{
           emptyText: (

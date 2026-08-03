@@ -235,7 +235,7 @@ const POSSales: React.FC = () => {
               </Space>
             }
             extra={
-              <Space>
+              <Space style={{ flexWrap: 'wrap' }}>
                 <DatePicker
                   value={viewDate}
                   onChange={(d) => d && setViewDate(d)}
@@ -259,7 +259,7 @@ const POSSales: React.FC = () => {
                       title="Tổng dòng"
                       value={posData.length}
                       suffix="dòng"
-                      valueStyle={{ fontSize: 20 }}
+                      valueStyle={{ fontSize: 18 }}
                     />
                   </Col>
                   <Col span={8}>
@@ -267,7 +267,7 @@ const POSSales: React.FC = () => {
                       title="Tổng qty bán"
                       value={totalQty}
                       suffix="cái"
-                      valueStyle={{ fontSize: 20, color: '#1677ff' }}
+                      valueStyle={{ fontSize: 18, color: '#1677ff' }}
                     />
                   </Col>
                   <Col span={8}>
@@ -276,7 +276,7 @@ const POSSales: React.FC = () => {
                       value={mappedCount}
                       suffix={`/ ${posData.length}`}
                       valueStyle={{
-                        fontSize: 20,
+                        fontSize: 18,
                         color: mappedCount === posData.length ? '#52c41a' : '#faad14',
                       }}
                     />
@@ -293,7 +293,7 @@ const POSSales: React.FC = () => {
               loading={isLoading}
               pagination={false}
               size="small"
-              scroll={{ y: 400 }}
+              scroll={{ x: 600, y: 400 }}
               locale={{
                 emptyText: (
                   <Empty

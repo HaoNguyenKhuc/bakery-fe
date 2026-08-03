@@ -555,6 +555,7 @@ const ProductionRequestList: React.FC = () => {
           loading={approvedLoading}
           rowKey="id"
           size="middle"
+          scroll={{ x: 750 }}
           expandable={expandable}
           onRow={(record) => ({
             style: { cursor: 'pointer' },
@@ -578,6 +579,7 @@ const ProductionRequestList: React.FC = () => {
           loading={pendingLoading || draftLoading}
           rowKey="id"
           size="middle"
+          scroll={{ x: 750 }}
           expandable={expandable}
           onRow={(record) => ({
             style: { cursor: 'pointer' },
@@ -601,6 +603,7 @@ const ProductionRequestList: React.FC = () => {
           loading={rejectedLoading}
           rowKey="id"
           size="middle"
+          scroll={{ x: 750 }}
           expandable={expandable}
           pagination={{ pageSize: 8 }}
         />
@@ -613,18 +616,18 @@ const ProductionRequestList: React.FC = () => {
   return (
     <div>
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <Title level={3} style={{ margin: 0 }}>Quản Lý Lệnh Sản Xuất</Title>
           <Text type="secondary">Bấm vào từng lệnh để xem và thao tác chi tiết từng dòng sản xuất</Text>
         </div>
-        <Space>
+        <Space style={{ flexWrap: 'wrap' }}>
           <Input
             placeholder="Tìm mã lệnh, người tạo..."
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            style={{ width: 230 }}
+            style={{ width: '100%', maxWidth: 230 }}
             allowClear
           />
           <DatePicker

@@ -124,7 +124,7 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
         initialValues={{ requestType: 'PURCHASE', requestDate: dayjs(), targetWarehouseId: warehouseFilter?.id }}
       >
         <Row gutter={16}>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <Form.Item name="requestType" label="Loại Phiếu" rules={[{ required: true }]}>
               <Select options={[
                 { value: 'PURCHASE', label: 'Nhập Kho (PURCHASE)' },
@@ -132,14 +132,14 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
               ]} />
             </Form.Item>
           </Col>
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <Form.Item name="requestDate" label="Ngày Yêu Cầu" rules={[{ required: true }]}>
               <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
             </Form.Item>
           </Col>
           
           {isPurchase ? (
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="supplierId" label="Nhà Cung Cấp" rules={[{ required: true }]}>
                 <Select
                   placeholder="Chọn nhà cung cấp..."
@@ -151,7 +151,7 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
               </Form.Item>
             </Col>
           ) : (
-            <Col span={12}>
+            <Col xs={24} md={12}>
               <Form.Item name="sourceWarehouseId" label="Kho Xuất" rules={[{ required: true }]}>
                 <Select
                   placeholder="Chọn kho xuất..."
@@ -162,7 +162,7 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
             </Col>
           )}
 
-          <Col span={12}>
+          <Col xs={24} md={12}>
             <Form.Item name="targetWarehouseId" label="Kho Nhận" rules={[{ required: true }]}>
               <Select
                 placeholder="Chọn kho nhận..."
@@ -186,89 +186,93 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
           </Button>
         </div>
 
-        <Row gutter={8} style={{ marginBottom: 8, fontWeight: 600, color: '#595959' }}>
-          <Col span={isPurchase ? 6 : 9}>Sản phẩm</Col>
-          <Col span={4}>Số lượng</Col>
-          <Col span={4}>Đơn vị</Col>
-          {isPurchase && <Col span={5}>Đơn giá</Col>}
-          <Col span={isPurchase ? 3 : 5}>Ghi chú</Col>
-          <Col span={2}></Col>
-        </Row>
-
-        <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          {lines.map((line, i) => (
-            <Row key={i} gutter={8} align="middle">
-              <Col span={isPurchase ? 6 : 9}>
-                <Select
-                  placeholder="Chọn sản phẩm..."
-                  value={line.itemId}
-                  onChange={(val) => {
-                    const item = ingredientsData?.find((x: any) => x.id === val);
-                    updateLine(i, 'itemId', val);
-                    if (item?.unit) updateLine(i, 'unit', item.unit);
-                  }}
-                  style={{ width: '100%' }}
-                  loading={loadingIngredients}
-                  showSearch
-                  filterOption={(input, option) => (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
-                  options={ingredientsData?.map((item: any) => ({ value: item.id, label: `${item.name} (${item.code})` }))}
-                />
-              </Col>
-              <Col span={4}>
-                <InputNumber
-                  min={0.01}
-                  value={line.quantity}
-                  onChange={(v) => updateLine(i, 'quantity', v ?? 1)}
-                  style={{ width: '100%' }}
-                  placeholder="Số lượng"
-                />
-              </Col>
-              <Col span={4}>
-                <Select
-                  placeholder="Đơn vị"
-                  value={line.unit}
-                  onChange={(val) => updateLine(i, 'unit', val)}
-                  style={{ width: '100%' }}
-                  loading={loadingUnits}
-                  options={unitsData?.map((u: any) => ({ value: u.code, label: u.name }))}
-                />
-              </Col>
-              {isPurchase && (
-                <Col span={5}>
-                  <InputNumber
-                    min={0}
-                    value={line.unitCost}
-                    onChange={(v) => updateLine(i, 'unitCost', v ?? 0)}
-                    style={{ width: '100%' }}
-                    placeholder="Đơn giá"
-                    formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  />
-                </Col>
-              )}
-              <Col span={isPurchase ? 3 : 5}>
-                <Input
-                  placeholder="Ghi chú"
-                  value={line.note || ''}
-                  onChange={(e) => updateLine(i, 'note', e.target.value)}
-                />
-              </Col>
-              <Col span={2} style={{ textAlign: 'center' }}>
-                <Tooltip title="Xoá dòng">
-                  <Button
-                    danger
-                    type="text"
-                    icon={<DeleteOutlined />}
-                    onClick={() => removeLine(i)}
-                  />
-                </Tooltip>
-              </Col>
+        <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
+          <div style={{ minWidth: 600 }}>
+            <Row gutter={8} style={{ marginBottom: 8, fontWeight: 600, color: '#595959' }}>
+              <Col span={isPurchase ? 6 : 9}>Sản phẩm</Col>
+              <Col span={4}>Số lượng</Col>
+              <Col span={4}>Đơn vị</Col>
+              {isPurchase && <Col span={5}>Đơn giá</Col>}
+              <Col span={isPurchase ? 3 : 5}>Ghi chú</Col>
+              <Col span={2}></Col>
             </Row>
-          ))}
-        </Space>
+
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>
+              {lines.map((line, i) => (
+                <Row key={i} gutter={8} align="middle">
+                  <Col span={isPurchase ? 6 : 9}>
+                    <Select
+                      placeholder="Chọn sản phẩm..."
+                      value={line.itemId}
+                      onChange={(val) => {
+                        const item = ingredientsData?.find((x: any) => x.id === val);
+                        updateLine(i, 'itemId', val);
+                        if (item?.unit) updateLine(i, 'unit', item.unit);
+                      }}
+                      style={{ width: '100%' }}
+                      loading={loadingIngredients}
+                      showSearch
+                      filterOption={(input, option) => (option?.label as string ?? '').toLowerCase().includes(input.toLowerCase())}
+                      options={ingredientsData?.map((item: any) => ({ value: item.id, label: `${item.name} (${item.code})` }))}
+                    />
+                  </Col>
+                  <Col span={4}>
+                    <InputNumber
+                      min={0.01}
+                      value={line.quantity}
+                      onChange={(v) => updateLine(i, 'quantity', v ?? 1)}
+                      style={{ width: '100%' }}
+                      placeholder="Số lượng"
+                    />
+                  </Col>
+                  <Col span={4}>
+                    <Select
+                      placeholder="Đơn vị"
+                      value={line.unit}
+                      onChange={(val) => updateLine(i, 'unit', val)}
+                      style={{ width: '100%' }}
+                      loading={loadingUnits}
+                      options={unitsData?.map((u: any) => ({ value: u.code, label: u.name }))}
+                    />
+                  </Col>
+                  {isPurchase && (
+                    <Col span={5}>
+                      <InputNumber
+                        min={0}
+                        value={line.unitCost}
+                        onChange={(v) => updateLine(i, 'unitCost', v ?? 0)}
+                        style={{ width: '100%' }}
+                        placeholder="Đơn giá"
+                        formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                      />
+                    </Col>
+                  )}
+                  <Col span={isPurchase ? 3 : 5}>
+                    <Input
+                      placeholder="Ghi chú"
+                      value={line.note || ''}
+                      onChange={(e) => updateLine(i, 'note', e.target.value)}
+                    />
+                  </Col>
+                  <Col span={2} style={{ textAlign: 'center' }}>
+                    <Tooltip title="Xoá dòng">
+                      <Button
+                        danger
+                        type="text"
+                        icon={<DeleteOutlined />}
+                        onClick={() => removeLine(i)}
+                      />
+                    </Tooltip>
+                  </Col>
+                </Row>
+              ))}
+            </Space>
+          </div>
+        </div>
 
         <Divider />
         <Form.Item style={{ textAlign: 'right', marginBottom: 0 }}>
-          <Space>
+          <Space className="mobile-sticky-footer">
             {onCancel && (
               <Button onClick={onCancel}>
                 Hủy / Quay lại

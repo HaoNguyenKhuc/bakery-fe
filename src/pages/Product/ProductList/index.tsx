@@ -220,6 +220,7 @@ const ProductList: React.FC = () => {
       title: 'Nhóm',
       key: 'itemGroup',
       width: 140,
+      responsive: ['md' as const],
       render: (_: unknown, record: Item) => {
         const groupName = record.itemGroup?.name || record.itemGroup?.value;
         return groupName
@@ -231,7 +232,7 @@ const ProductList: React.FC = () => {
       title: 'Mã',
       dataIndex: 'code',
       key: 'code',
-      width: 200,
+      width: 150,
       render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text>,
     },
     {
@@ -253,6 +254,7 @@ const ProductList: React.FC = () => {
       key: 'unit',
       width: 80,
       align: 'center',
+      responsive: ['sm' as const],
       render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
     },
     {
@@ -308,12 +310,12 @@ const ProductList: React.FC = () => {
   return (
     <div>
       {/* Page Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <Title level={3} style={{ margin: 0 }}>Danh sách sản phẩm</Title>
           <Text type="secondary">Quản lý hàng hoá, bán thành phẩm và nguyên liệu</Text>
         </div>
-        <Space>
+        <Space style={{ flexWrap: 'wrap' }}>
           <Button icon={<SyncOutlined />} onClick={handleRefresh} loading={isLoading}>
             Làm mới
           </Button>
@@ -327,7 +329,7 @@ const ProductList: React.FC = () => {
       <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '0 0 16px' }}>
 
         {/* ── ItemType Tabs ── */}
-        <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', padding: '0 20px' }}>
+        <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', padding: '0 20px', overflowX: 'auto' }}>
           {(Object.keys(ITEM_TYPE_LABELS) as ItemType[]).map(type => {
             const { label, emoji, color } = ITEM_TYPE_LABELS[type];
             const active = activeItemType === type;
@@ -345,6 +347,7 @@ const ProductList: React.FC = () => {
                   marginBottom: -2,
                   transition: 'all 0.15s',
                   userSelect: 'none',
+                  whiteSpace: 'nowrap',
                 }}
               >
                 {emoji} {label}
@@ -372,6 +375,7 @@ const ProductList: React.FC = () => {
                     marginBottom: -1,
                     transition: 'all 0.15s',
                     userSelect: 'none',
+                    whiteSpace: 'nowrap',
                   }}
                 >
                   {g.name}
@@ -389,7 +393,7 @@ const ProductList: React.FC = () => {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(0); }}
             allowClear
-            style={{ maxWidth: 240 }}
+            style={{ width: '100%', maxWidth: 240 }}
           />
           {/* Status filter pills */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -443,7 +447,7 @@ const ProductList: React.FC = () => {
         )}
 
         {/* ── Table ── */}
-        <div style={{ padding: '0 20px' }}>
+        <div style={{ padding: '0 20px', overflowX: 'auto' }}>
           <Table<Item>
             columns={columns}
             dataSource={displayItems}
@@ -452,6 +456,7 @@ const ProductList: React.FC = () => {
             size="small"
             pagination={false}
             bordered={false}
+            scroll={{ x: 750 }}
             style={{ fontSize: 13 }}
             onRow={(record) => ({
               style: { cursor: 'default' },

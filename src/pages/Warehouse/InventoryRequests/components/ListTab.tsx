@@ -238,6 +238,7 @@ const ListTab: React.FC<ListTabProps> = ({ warehouseFilter }) => {
         loading={isLoading}
         rowKey="id"
         size="middle"
+        scroll={{ x: 750 }}
         pagination={{ pageSize: 15, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} phiếu` }}
         expandable={{
           expandedRowRender: (record) => {

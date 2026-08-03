@@ -164,7 +164,7 @@ const ThresholdRules: React.FC = () => {
       <main className="pp-content">
       <Row gutter={[24, 24]}>
         {/* LEFT: Navigation panel */}
-        <Col span={7}>
+        <Col xs={24} md={8}>
           <div className="pp-card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div className="pp-card__header" style={{ padding: '12px 16px' }}>
               <span className="pp-card__title" style={{ fontSize: 'var(--pp-text-sm)' }}>
@@ -243,7 +243,7 @@ const ThresholdRules: React.FC = () => {
         </Col>
 
         {/* RIGHT: Rules Editor */}
-        <Col span={17}>
+        <Col xs={24} md={16}>
           {editingItems.length === 0 ? (
             <div className="pp-card" style={{ padding: 'var(--pp-space-2xl) var(--pp-space-lg)' }}>
               <div className="pp-empty">
@@ -296,6 +296,7 @@ const ThresholdRules: React.FC = () => {
               rowKey={(r) => r.product.id}
               pagination={false}
               size="small"
+              scroll={{ x: 600 }}
               loading={isSummaryLoading}
             />
           )}

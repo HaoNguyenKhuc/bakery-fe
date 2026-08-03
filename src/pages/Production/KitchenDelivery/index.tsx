@@ -211,6 +211,7 @@ const KitchenDelivery: React.FC = () => {
       key: 'confirmedAt',
       width: 110,
       align: 'center',
+      responsive: ['sm' as const],
       render: (_, row) =>
         row.confirmedAt ? (
           <Text style={{ fontSize: 12 }}>
@@ -319,9 +320,9 @@ const KitchenDelivery: React.FC = () => {
 
       <Card>
         {/* ─── Header: date nav + status ────────────────────────────── */}
-        <Row align="middle" justify="space-between" style={{ marginBottom: 16 }}>
-          <Col>
-            <Space>
+        <Row align="middle" justify="space-between" gutter={[12, 12]} style={{ marginBottom: 16 }}>
+          <Col xs={24} md={14}>
+            <Space style={{ flexWrap: 'wrap' }}>
               <Tooltip title="Hôm trước">
                 <Button
                   icon={<LeftOutlined />}
@@ -332,7 +333,7 @@ const KitchenDelivery: React.FC = () => {
                 value={date}
                 onChange={(d) => d && setDate(d)}
                 format="DD/MM/YYYY"
-                style={{ width: 150 }}
+                style={{ width: 140 }}
                 allowClear={false}
               />
               <Tooltip title="Hôm sau">
@@ -349,8 +350,8 @@ const KitchenDelivery: React.FC = () => {
               />
             </Space>
           </Col>
-          <Col>
-            <Space>
+          <Col xs={24} md={10} style={{ textAlign: 'right' }}>
+            <Space style={{ flexWrap: 'wrap' }}>
               {confirmedCount > 0 && (
                 <Tag color="success" style={{ padding: '4px 10px', fontSize: 13 }}>
                   <CheckCircleOutlined /> Đã xác nhận ({confirmedCount})
@@ -375,6 +376,7 @@ const KitchenDelivery: React.FC = () => {
           loading={isLoading}
           pagination={false}
           size="middle"
+          scroll={{ x: 650 }}
           rowClassName={(row) =>
             row.deliveryStatus === 'CONFIRMED'
               ? 'ant-table-row-confirmed'

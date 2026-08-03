@@ -147,12 +147,12 @@ const ProductForm: React.FC = () => {
   return (
     <div>
       {/* Page Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <Space>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+        <Space style={{ flexWrap: 'wrap' }}>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/products')}>
             Danh Sách Hàng Hoá
           </Button>
-          <Divider type="vertical" />
+          <Divider type="vertical" className="hide-on-mobile" />
           <AppstoreOutlined style={{ fontSize: 20, color: '#D2691E' }} />
           <Title level={4} style={{ margin: 0 }}>
             {isEdit ? 'Chỉnh Sửa Hàng Hoá' : 'Tạo / Sửa sản phẩm'}
@@ -161,7 +161,7 @@ const ProductForm: React.FC = () => {
             <Tag color="blue" style={{ marginLeft: 8 }}>ID: {id}</Tag>
           )}
         </Space>
-        <Space>
+        <Space className="mobile-sticky-footer">
           <Button onClick={() => navigate('/products')}>Huỷ</Button>
           <Button
             type="primary"
@@ -480,6 +480,7 @@ const ProductForm: React.FC = () => {
                           pagination={false}
                           size="small"
                           bordered
+                          scroll={{ x: 550 }}
                           locale={{ emptyText: 'Chưa có nguyên liệu nào. Bấm "Thêm Dòng" để bắt đầu.' }}
                         />
                         <Button

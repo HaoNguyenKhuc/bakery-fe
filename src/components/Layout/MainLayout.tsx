@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout, Menu, Breadcrumb, Avatar, Dropdown, Badge, Tooltip } from 'antd';
+import { Layout, Menu, Breadcrumb, Avatar, Dropdown, Badge, Tooltip, Drawer, Grid } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   DashboardOutlined,
@@ -12,6 +12,7 @@ import {
   LogoutOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  MenuOutlined,
   ProfileOutlined,
   UnorderedListOutlined,
   ExperimentOutlined,
@@ -36,6 +37,8 @@ import { roleService } from '../../api/services/roleService';
 import type { MockRole } from '../../types';
 
 const { Sider, Header, Content } = Layout;
+const { useBreakpoint } = Grid;
+
 
 // --- Route & Menu Configuration ---
 
@@ -151,10 +154,17 @@ const ROLE_LABELS: Record<string, string> = {
 // --- Main Layout Component ---
 
 const MainLayout: React.FC = () => {
-  // Use global stores instead of local state
+  // Breakpoint tracking from Ant Design
+  const screens = useBreakpoint();
+  const isMobile = screens.md === false;
+
+  // Use global stores
   const collapsed = useAppStore(selectSidebarCollapsed);
   const toggleSidebar = useAppStore((s) => s.toggleSidebar);
   const unreadCount = useAppStore(selectUnreadCount);
+
+  // Mobile Drawer state
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -181,6 +191,13 @@ const MainLayout: React.FC = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Auto-close mobile drawer on route change
+  useEffect(() => {
+    if (isMobile) {
+      setDrawerOpen(false);
+    }
+  }, [location.pathname, isMobile]);
 
   // Track expanded tree nodes in sidebar (all expanded by default)
   const [expandedGroups, setExpandedGroups] = useState<string[]>(() =>
@@ -251,15 +268,10 @@ const MainLayout: React.FC = () => {
     return items;
   }, [location, navigate]);
 
-  // Handle menu click
-  const onMenuClick: MenuProps['onClick'] = ({ key }) => {
-    navigate(key);
-  };
-
   // Handle user dropdown click
   const onUserMenuClick: MenuProps['onClick'] = async ({ key }) => {
     if (key === 'logout') {
-      await authService.logout(); // fire-and-forget, không block UI
+      await authService.logout();
       logout();
       navigate('/login');
     } else if (key === 'profile') {
@@ -308,138 +320,177 @@ const MainLayout: React.FC = () => {
     }).filter((group) => group.items.length > 0);
   }, [permissionMap, roleCode, canViewScreen, isSuperAdminFn]);
 
-  return (
-    <Layout style={{ minHeight: '100vh' }}>
-      {/* --- Sidebar --- */}
-      <Sider
-        className="sidebar"
-        collapsible
-        collapsed={collapsed}
-        onCollapse={toggleSidebar}
-        width={240}
-        collapsedWidth={80}
-        trigger={null}
-        breakpoint="lg"
-        style={{
-          overflow: 'auto',
-          height: '100vh',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
+  // Shared Sidebar Navigation Content
+  const renderNavContent = (isCollapsedState: boolean) => (
+    <>
+      <div
+        className={`sidebar-logo ${isCollapsedState ? 'collapsed' : ''}`}
+        onClick={() => {
+          navigate('/products');
+          if (isMobile) setDrawerOpen(false);
         }}
       >
-        {/* Logo */}
-        <div
-          className={`sidebar-logo ${collapsed ? 'collapsed' : ''}`}
-          onClick={() => navigate('/products')}
-        >
-          <span className="sidebar-logo-icon">🥐</span>
-          {!collapsed && <span className="sidebar-logo-text">Hệ Thống Quản Lý</span>}
-        </div>
+        <span className="sidebar-logo-icon">🥐</span>
+        {!isCollapsedState && <span className="sidebar-logo-text">Hệ Thống Quản Lý</span>}
+      </div>
 
-        {/* Custom Navigation Tree Menu matching dev-ui.html */}
-        <nav className="sidebar-nav">
-          {filteredNavGroups.map((group) => {
-            const isExpanded = expandedGroups.includes(group.label);
-            const showChildren = collapsed || isExpanded;
-            return (
-              <div key={group.label} className="sidebar-nav-group">
-                <div
-                  className="sidebar-nav-label tree-header"
-                  onClick={() => !collapsed && toggleGroup(group.label)}
-                  style={{
-                    cursor: collapsed ? 'default' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                  }}
-                  title={collapsed ? group.label : `Nhấp để ${isExpanded ? 'thu gọn' : 'mở rộng'}`}
-                >
-                  <span className="tree-label-text">{group.label}</span>
-                  {!collapsed && (
-                    <span
-                      className="tree-toggle-icon"
-                      style={{
-                        fontSize: 9,
-                        transition: 'transform 0.2s ease',
-                        transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-                        opacity: 0.7,
-                      }}
-                    >
-                      ▼
-                    </span>
-                  )}
-                </div>
-                {showChildren && (
-                  <div className="sidebar-nav-children">
-                    {group.items.map((item) => {
-                      const itemPath = item.key.split('?')[0];
-                      const itemQuery = item.key.includes('?') ? item.key.split('?')[1] : null;
-                      const isPathMatch = location.pathname.startsWith(itemPath) && (itemPath !== '/' || location.pathname === '/');
-                      const isQueryMatch = !itemQuery || location.search.includes(itemQuery) || (!location.search && itemQuery === 'tab=kho-chinh');
-                      const isActive = isPathMatch && isQueryMatch;
-                      return (
-                        <div
-                          key={item.key}
-                          className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
-                          onClick={() => navigate(item.key)}
-                          title={collapsed ? item.label : undefined}
-                        >
-                          <span className="sidebar-nav-item-text">{item.label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+      <nav className="sidebar-nav">
+        {filteredNavGroups.map((group) => {
+          const isExpanded = expandedGroups.includes(group.label);
+          const showChildren = isCollapsedState || isExpanded;
+          return (
+            <div key={group.label} className="sidebar-nav-group">
+              <div
+                className="sidebar-nav-label tree-header"
+                onClick={() => !isCollapsedState && toggleGroup(group.label)}
+                style={{
+                  cursor: isCollapsedState ? 'default' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+                title={isCollapsedState ? group.label : `Nhấp để ${isExpanded ? 'thu gọn' : 'mở rộng'}`}
+              >
+                <span className="tree-label-text">{group.label}</span>
+                {!isCollapsedState && (
+                  <span
+                    className="tree-toggle-icon"
+                    style={{
+                      fontSize: 9,
+                      transition: 'transform 0.2s ease',
+                      transform: isExpanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                      opacity: 0.7,
+                    }}
+                  >
+                    ▼
+                  </span>
                 )}
               </div>
-            );
-          })}
-        </nav>
+              {showChildren && (
+                <div className="sidebar-nav-children">
+                  {group.items.map((item) => {
+                    const itemPath = item.key.split('?')[0];
+                    const itemQuery = item.key.includes('?') ? item.key.split('?')[1] : null;
+                    const isPathMatch = location.pathname.startsWith(itemPath) && (itemPath !== '/' || location.pathname === '/');
+                    const isQueryMatch = !itemQuery || location.search.includes(itemQuery) || (!location.search && itemQuery === 'tab=kho-chinh');
+                    const isActive = isPathMatch && isQueryMatch;
+                    return (
+                      <div
+                        key={item.key}
+                        className={`sidebar-nav-item ${isActive ? 'active' : ''}`}
+                        onClick={() => {
+                          navigate(item.key);
+                          if (isMobile) setDrawerOpen(false);
+                        }}
+                        title={isCollapsedState ? item.label : undefined}
+                      >
+                        <span className="sidebar-nav-item-text">{item.label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </nav>
 
-        {/* Sidebar Footer */}
-        {!collapsed && (
-          <div
+      {!isCollapsedState && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            textAlign: 'center',
+          }}
+        >
+          <span
             style={{
-              padding: '12px 16px',
-              borderTop: '1px solid rgba(255,255,255,0.06)',
-              textAlign: 'center',
+              fontSize: 11,
+              color: 'rgba(255,255,255,0.3)',
             }}
           >
-            <span
-              style={{
-                fontSize: 11,
-                color: 'rgba(255,255,255,0.3)',
-              }}
-            >
-              © 2026 BakeryMS v1.0
-            </span>
-          </div>
-        )}
-      </Sider>
+            © 2026 BakeryMS v1.0
+          </span>
+        </div>
+      )}
+    </>
+  );
+
+  return (
+    <Layout style={{ minHeight: '100vh' }}>
+      {/* Mobile Navigation Drawer */}
+      {isMobile ? (
+        <Drawer
+          placement="left"
+          width={260}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          closable={false}
+          styles={{
+            body: {
+              padding: 0,
+              background: '#1e293b',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+            },
+          }}
+        >
+          {renderNavContent(false)}
+        </Drawer>
+      ) : (
+        /* Desktop Fixed Sidebar */
+        <Sider
+          className="sidebar"
+          collapsible
+          collapsed={collapsed}
+          onCollapse={toggleSidebar}
+          width={240}
+          collapsedWidth={80}
+          trigger={null}
+          breakpoint="lg"
+          style={{
+            overflow: 'auto',
+            height: '100vh',
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
+          }}
+        >
+          {renderNavContent(collapsed)}
+        </Sider>
+      )}
 
       {/* --- Main Content Area --- */}
       <Layout
         style={{
-          marginLeft: collapsed ? 80 : 260,
+          marginLeft: isMobile ? 0 : (collapsed ? 80 : 260),
           transition: 'margin-left 0.2s ease',
         }}
       >
         {/* Header */}
         <Header className="app-header">
           <div className="header-left">
-            {/* Collapse Toggle */}
+            {/* Collapse / Drawer Toggle */}
             <button
               className="header-action-btn"
-              onClick={toggleSidebar}
-              aria-label="Toggle sidebar"
+              onClick={isMobile ? () => setDrawerOpen(true) : toggleSidebar}
+              aria-label="Toggle navigation"
             >
-              {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+              {isMobile ? (
+                <MenuOutlined />
+              ) : collapsed ? (
+                <MenuUnfoldOutlined />
+              ) : (
+                <MenuFoldOutlined />
+              )}
             </button>
 
             {/* Breadcrumb */}
             <Breadcrumb items={breadcrumbItems} />
           </div>
+
 
           <div className="header-right">
             {/* Notifications */}

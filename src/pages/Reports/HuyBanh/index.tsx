@@ -60,6 +60,7 @@ const HuyBanhReportPage: React.FC = () => {
       title: 'Đơn vị',
       dataIndex: 'unit',
       key: 'unit',
+      responsive: ['sm' as const],
       render: (u: string) => u || 'cái',
     },
     {
@@ -67,6 +68,7 @@ const HuyBanhReportPage: React.FC = () => {
       dataIndex: 'qtyDisposedExpected',
       key: 'qtyDisposedExpected',
       align: 'right' as const,
+      responsive: ['sm' as const],
       render: (val: number) => val ?? 0,
     },
     {
@@ -93,7 +95,7 @@ const HuyBanhReportPage: React.FC = () => {
       <Card
         title="🗑️ Báo cáo Hủy Bánh"
         extra={
-          <Space>
+          <Space style={{ flexWrap: 'wrap' }}>
             <Text>Chọn ngày:</Text>
             <DatePicker
               value={dayjs(selectedDate)}
@@ -103,8 +105,8 @@ const HuyBanhReportPage: React.FC = () => {
           </Space>
         }
       >
-        <Row gutter={16} style={{ marginBottom: 16 }}>
-          <Col span={12}>
+        <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+          <Col xs={12} md={12}>
             <div className="stat">
               <div className="stat-label">Tổng sản phẩm bị hủy</div>
               <div className="stat-value" style={{ color: '#ff4d4f' }}>
@@ -112,7 +114,7 @@ const HuyBanhReportPage: React.FC = () => {
               </div>
             </div>
           </Col>
-          <Col span={12}>
+          <Col xs={12} md={12}>
             <div className="stat">
               <div className="stat-label">Trạng thái Báo cáo Ngày</div>
               <div style={{ marginTop: 6 }}>
@@ -129,6 +131,7 @@ const HuyBanhReportPage: React.FC = () => {
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 600 }}
           pagination={{ pageSize: 15 }}
           size="small"
         />

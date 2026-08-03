@@ -249,6 +249,7 @@ const DailyPlan: React.FC = () => {
       <div className="pp-table-wrap">
         <Table
           size="small"
+          scroll={{ x: 800 }}
           dataSource={dataSource}
           rowKey="id"
           pagination={false}

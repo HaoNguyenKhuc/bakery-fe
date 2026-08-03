@@ -581,8 +581,8 @@ const DailyReportPage: React.FC = () => {
         {/* ─── Summary stats ───────────────────────────────────────────── */}
         {mergedRows.length > 0 && (
           <>
-            <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col span={6}>
+            <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+              <Col xs={12} md={6}>
                 <Statistic
                   title="Bếp SX"
                   value={totalSX}
@@ -590,7 +590,7 @@ const DailyReportPage: React.FC = () => {
                   valueStyle={{ fontSize: 18, color: '#059669' }}
                 />
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Statistic
                   title="Nhận trong ngày"
                   value={totalReceived}
@@ -598,7 +598,7 @@ const DailyReportPage: React.FC = () => {
                   valueStyle={{ fontSize: 18, color: '#2563eb' }}
                 />
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Statistic
                   title="Còn lại"
                   value={totalRemaining}
@@ -606,7 +606,7 @@ const DailyReportPage: React.FC = () => {
                   valueStyle={{ fontSize: 18, color: '#7c3aed' }}
                 />
               </Col>
-              <Col span={6}>
+              <Col xs={12} md={6}>
                 <Statistic
                   title="Sản phẩm"
                   value={mergedRows.length}

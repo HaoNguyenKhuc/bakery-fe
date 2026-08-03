@@ -65,12 +65,14 @@ const ProdAdjustmentsPage: React.FC = () => {
       title: 'Lý do',
       dataIndex: 'reason',
       key: 'reason',
+      responsive: ['sm' as const],
       render: (r: string) => r || '—',
     },
     {
       title: 'Ghi chú',
       dataIndex: 'note',
       key: 'note',
+      responsive: ['md' as const],
       render: (n: string) => n || '—',
     },
   ];
@@ -80,7 +82,7 @@ const ProdAdjustmentsPage: React.FC = () => {
       <Card
         title="⚠️ Điều chỉnh sản xuất"
         extra={
-          <Space>
+          <Space style={{ flexWrap: 'wrap' }}>
             <DatePicker
               value={dayjs(selectedDate)}
               onChange={(date) => setSelectedDate(date ? date.format('YYYY-MM-DD') : '')}
@@ -89,7 +91,7 @@ const ProdAdjustmentsPage: React.FC = () => {
             <Select
               value={adjType}
               onChange={setAdjType}
-              style={{ width: 200 }}
+              style={{ width: '100%', maxWidth: 200 }}
               options={[
                 { value: 'ALL', label: 'Tất cả loại' },
                 { value: 'INGREDIENT_VARIANCE', label: 'Chênh lệch NL' },
@@ -111,6 +113,7 @@ const ProdAdjustmentsPage: React.FC = () => {
           columns={columns}
           rowKey="id"
           loading={loading}
+          scroll={{ x: 600 }}
           pagination={{ pageSize: 10 }}
           size="small"
         />

@@ -101,6 +101,7 @@ const ProductionConfig: React.FC = () => {
               <div className="pp-table-wrap">
                 <Table
                   size="small"
+                  scroll={{ x: 'max-content' }}
                   dataSource={freeGroups.flatMap(g => (g.items || []).map((gi, idx) => ({ ...gi, group: g, isFirst: idx === 0, rowSpan: g.items?.length || 1 })))}
                   rowKey={(r) => `${r.group.id}-${r.itemId}`}
                   pagination={false}
@@ -189,6 +190,7 @@ const ProductionConfig: React.FC = () => {
               <div className="pp-table-wrap">
                 <Table
                   size="small"
+                  scroll={{ x: 'max-content' }}
                   dataSource={batchGroups.flatMap(g => (g.items || []).map((gi, idx) => ({ ...gi, group: g, isFirst: idx === 0, rowSpan: g.items?.length || 1 })))}
                   rowKey={(r) => `${r.group.id}-${r.itemId}`}
                   pagination={false}
@@ -269,6 +271,7 @@ const ProductionConfig: React.FC = () => {
               <div className="pp-table-wrap">
                 <Table
                   size="small"
+                  scroll={{ x: 'max-content' }}
                   dataSource={simpleProductsWithRules}
                   rowKey={(r) => r.product.id}
                   pagination={false}
