@@ -207,6 +207,20 @@ const KitchenDelivery: React.FC = () => {
       },
     },
     {
+      title: 'Mã EX',
+      key: 'assignedExCode',
+      width: 120,
+      align: 'center',
+      render: (_, row) =>
+        row.assignedExCode ? (
+          <Tag color="blue" style={{ fontFamily: 'monospace', fontSize: 12 }}>
+            {row.assignedExCode}
+          </Tag>
+        ) : (
+          <Text type="secondary" style={{ fontSize: 11 }}>—</Text>
+        ),
+    },
+    {
       title: 'Xác nhận lúc',
       key: 'confirmedAt',
       width: 110,

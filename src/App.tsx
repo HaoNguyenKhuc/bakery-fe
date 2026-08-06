@@ -37,6 +37,11 @@ const InventoryRequestCreate = React.lazy(() => import('./pages/Warehouse/Invent
 
 // Báo cáo
 const ReportsPage = React.lazy(() => import('./pages/Reports'));
+const DailyReportNV = React.lazy(() => import('./pages/Reports/DailyReport'));
+const AdminDailyReport = React.lazy(() => import('./pages/Reports/AdminDailyReport'));
+
+// Cửa hàng
+const CancelList = React.lazy(() => import('./pages/CancelList'));
 
 // Hệ thống
 const Users = React.lazy(() => import('./pages/System/Users'));
@@ -111,8 +116,13 @@ const App: React.FC = () => {
         <Route path="stock-summary" element={<Navigate to="/warehouse/kho-chinh" replace />} />
         <Route path="inventory-requests" element={<Lazy><InventoryRequests /></Lazy>} />
 
+        {/* ── Cửa hàng ── */}
+        <Route path="cancel-list" element={<Lazy><CancelList /></Lazy>} />
+
         {/* ── Báo cáo ── */}
         <Route path="reports" element={<Lazy><ReportsPage /></Lazy>} />
+        <Route path="reports/daily" element={<Lazy><DailyReportNV /></Lazy>} />
+        <Route path="reports/admin" element={<Lazy><AdminDailyReport /></Lazy>} />
 
         {/* ── Hệ thống ── */}
         <Route path="users"        element={<Lazy><Users /></Lazy>} />

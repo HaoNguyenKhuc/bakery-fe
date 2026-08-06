@@ -108,6 +108,9 @@ const inventoryService = {
   rejectRequest: (requestId: string, payload: import('../../types').RejectRequestPayload) =>
     api.post<Record<string, unknown>>(`/api/v1/inventory-requests/${requestId}/reject`, payload),
 
+  updateLineCost: (requestId: string, lineId: string, unitCost: number) =>
+    api.patch<void>(`/api/v1/inventory-requests/${requestId}/lines/${lineId}`, { unitCost }),
+
   // ── ĐỐI CHIẾU CUỐI NGÀY ─────────────────────────
 
   /**

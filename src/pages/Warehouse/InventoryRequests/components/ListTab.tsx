@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Input, Tag, Space, Typography, Badge, message, Popconfirm, Select, Card, Row, Col, Tabs } from 'antd';
+import { Table, Button, Input, InputNumber, Tag, Space, Typography, Badge, message, Popconfirm, Select, Card, Row, Col, Tabs } from 'antd';
 import { SearchOutlined, CheckOutlined, CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -16,6 +16,93 @@ import type {
 } from '../../../../types';
 
 const { Text } = Typography;
+
+/** Component con: expand row với local state cho unit cost → tính tiền realtime */
+const ExpandedLines: React.FC<{
+  record: UnifiedTransactionResponse;
+  isPending: boolean;
+  showPrice: boolean;
+}> = ({ record, isPending, showPrice }) => {
+  const lines: any[] = (record as any).lines ?? [];
+
+  // local state: lineId → unitCost hiện tại (controlled)
+  const [costs, setCosts] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {};
+    lines.forEach((l) => { if (l.unitCost != null) init[l.id] = Number(l.unitCost); });
+    return init;
+  });
+
+  const getCost = (l: any) => costs[l.id] ?? Number(l.unitCost ?? 0);
+  const total = lines.reduce((sum, l) => sum + getCost(l) * Number(l.quantity ?? 0), 0);
+
+  if (lines.length === 0) return <Text type="secondary">Không có dòng</Text>;
+
+  return (
+    <Table
+      dataSource={lines}
+      pagination={false}
+      size="small"
+      rowKey="id"
+      columns={[
+        { title: 'Hàng hóa', render: (_, r: any) => r.item?.name || r.item?.key },
+        { title: 'Số lượng', dataIndex: 'quantity', align: 'right' },
+        { title: 'Đơn vị', dataIndex: 'unit' },
+        ...(!showPrice ? [] : [
+          {
+            title: 'Đơn giá',
+            align: 'right' as const,
+            render: (_: any, r: any) => isPending ? (
+              <InputNumber
+                size="small"
+                value={costs[r.id] ?? (r.unitCost != null ? Number(r.unitCost) : undefined)}
+                min={0}
+                step={500}
+                formatter={(v: any) => v != null ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''}
+                parser={(v: any) => Number((v ?? '').replace(/,/g, '')) as any}
+                onChange={(val: any) => {
+                  if (val != null) setCosts(prev => ({ ...prev, [r.id]: Number(val) }));
+                }}
+                onBlur={() => {
+                  const val = costs[r.id];
+                  if (val != null && val >= 0) {
+                    inventoryService.updateLineCost(record.id, r.id, val)
+                      .catch(() => message.error('Lưu giá thất bại'));
+                  }
+                }}
+                style={{ width: 110 }}
+                suffix="đ"
+              />
+            ) : (
+              <Text>{r.unitCost ? `${Number(r.unitCost).toLocaleString('vi-VN')}đ` : '—'}</Text>
+            ),
+          },
+          {
+            title: 'Thành tiền',
+            align: 'right' as const,
+            render: (_: any, r: any) => {
+              const subtotal = getCost(r) * Number(r.quantity ?? 0);
+              return subtotal > 0
+                ? <Text strong>{subtotal.toLocaleString('vi-VN')}đ</Text>
+                : <Text type="secondary">—</Text>;
+            },
+          },
+        ]),
+      ]}
+      summary={!showPrice ? undefined : () => (
+        <Table.Summary.Row>
+          <Table.Summary.Cell index={0} colSpan={4} align="right">
+            <Text strong>Tổng cộng</Text>
+          </Table.Summary.Cell>
+          <Table.Summary.Cell index={4} align="right">
+            <Text strong style={{ color: total > 0 ? '#1677ff' : undefined }}>
+              {total > 0 ? `${total.toLocaleString('vi-VN')}đ` : '—'}
+            </Text>
+          </Table.Summary.Cell>
+        </Table.Summary.Row>
+      )}
+    />
+  );
+};
 
 const TYPE_LABEL: Record<TransactionType, string> = {
   PURCHASE: 'Mua Hàng',
@@ -242,22 +329,10 @@ const ListTab: React.FC<ListTabProps> = ({ warehouseFilter }) => {
         pagination={{ pageSize: 15, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} phiếu` }}
         expandable={{
           expandedRowRender: (record) => {
-            const lines = record.lines ?? [];
-            if (lines.length === 0) return <Text type="secondary">Không có dòng</Text>;
-            return (
-              <Table
-                dataSource={lines}
-                pagination={false}
-                size="small"
-                rowKey="id"
-                columns={[
-                  { title: 'Hàng hóa', render: (_, r) => r.item?.name || r.item?.key },
-                  { title: 'Số lượng', dataIndex: 'quantity', align: 'right' },
-                  { title: 'Đơn vị', dataIndex: 'unit' },
-                  { title: 'Đơn giá', render: (_, r) => r.unitCost ? `${r.unitCost}đ` : '—', align: 'right' }
-                ]}
-              />
-            );
+            const isPending = (record as any).approvalStatus === 'PENDING_APPROVAL'
+              || (record as any).approvalStatus === 'DRAFT';
+            const showPrice = (record as any).requestType === 'PURCHASE';
+            return <ExpandedLines record={record} isPending={isPending} showPrice={showPrice} />;
           }
         }}
       />

@@ -4,39 +4,60 @@ export interface DailyReport {
   id: string;
   reportDate: string;             // YYYY-MM-DD
   status: 'DRAFT' | 'FINALIZED';
-  finalizedBy?: string;           // username người chốt
-  finalizedAt?: string;           // ISO timestamp
+  finalizedBy?: string;
+  finalizedAt?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
+/**
+ * Một dòng trong báo cáo ngày — tổng hợp per-item.
+ * Source: GET /api/v1/daily-reports/{id}/lines
+ */
 export interface DailyReportLine {
   id: string;
-  item: {
-    key: string;    // itemCode
-    name: string;
-  };
-  // Kho bếp
-  qtyKitchenOpen: number;         // Tồn bếp (tồn tối + làm mới - đã giao)
-  qtyProduced: number;            // Bánh Ra Hôm Nay (SX trong ngày)
-  qtyDelivered: number;           // Đã Giao Shop
-  qtyRemainingActual?: number;    // Còn Lại* — nhân viên nhập thực tế
-  note?: string;
-  // Báo cáo ngày (full report)
-  qtyOpenPrev?: number;           // Tồn hôm qua
-  qtyReceivedShop?: number;       // Nhận trong ngày (shop)
-  qtyDiscrepancy?: number;        // Lệch SX/Nhận
-  qtyExpectedSale?: number;       // Bán dự tính
-  qtyActualPOS?: number;          // Bán thực tế (từ POS)
-  qtyPOSDiscrepancy?: number;     // Lệch POS
-  isCancelItem?: boolean;         // Hủy bánh (shelf_days = 0)
 
-  // ── Cancel-list fields (từ GET /cancel-list) ─────────────────────
-  qtyCancelled?: number | null;         // Số NV đã nhập hủy
-  discrepancyCancelQty?: number | null; // Lệch hủy = qtyCancelled − qtyRemainingActual
-  expiringExCodes?: string[];           // EX_CODE hết hạn cần hủy
-  expiringProductionDates?: string[];   // Ngày SX sắp hết hạn
-  shelfDays?: number;                   // Hạn sử dụng (ngày)
+  // Item info — backend có thể trả về nested object hoặc flat fields
+  item?: { key?: string; code?: string; name: string };
+  itemId?: string;
+  itemCode?: string;
+  itemName?: string;
+
+  // ── Sản xuất ─────────────────────────────────────────────────────────────────
+  /** Tồn kho shop đầu ngày (từ stock_lot.qty_remaining) */
+  qtyRemainingOpening?: number;
+  /** Bánh Bếp làm ra hôm nay (production_request_line.qty_actual) */
+  qtyProduced?: number;
+  /** Bánh shop thực nhận từ bếp (delivery_record xác nhận) */
+  qtyReceived?: number;
+  /** Chênh lệch bếp = qtyProduced − qtyReceived */
+  discrepancyKitchen?: number;
+
+  // ── Bán ──────────────────────────────────────────────────────────────────────
+  /** Bánh bán POS (từ pos_daily_sale) */
+  qtySoldPos?: number;
+  /** Bánh bán thực tế = (opening + received) − tồn − hủy */
+  qtySoldImplied?: number;
+  /** Chênh lệch POS = qtySoldPos − qtySoldImplied */
+  discrepancyPos?: number;
+
+  // ── Hủy ──────────────────────────────────────────────────────────────────────
+  /** Hủy dự kiến (tính từ expiry config) */
+  qtySystemCancel?: number;
+  /** Hủy thực tế (NV xác nhận qua cancel_record) */
+  qtyCancelled?: number;
+  /** Chênh lệch hủy = qtyCancelled − qtySystemCancel */
+  discrepancyCancel?: number;
+
+  // ── Còn lại ──────────────────────────────────────────────────────────────────
+  /** Còn lại hệ thống = opening + received − soldPos − systemCancel */
+  qtySystemRemaining?: number;
+  /** Còn lại NV nhập thực tế */
+  qtyRemainingActual?: number;
+  /** Chênh lệch còn lại = qtyRemainingActual − qtySystemRemaining */
+  discrepancyRemaining?: number;
+
+  note?: string;
 }
 
 export interface UpdateRemainingParams {

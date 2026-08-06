@@ -14,6 +14,8 @@ export interface DeliveryRecordResponse {
   confirmedAt?: string;           // ISO datetime
   confirmedBy?: string;
   note?: string;
+  /** EX_CODE được gán từ product_mapping khi shop xác nhận giao nhận */
+  assignedExCode?: string;
 }
 
 /** Flatten từ ProductionRequestLineResponse cho màn hình Giao nhận */

@@ -1,23 +1,18 @@
-import api from '../axiosClient';
 import { axiosClient } from '../axiosClient';
 import type { DailyReport, DailyReportLine } from '../../types/dailyReport';
 
 /**
  * dailyReportService
  *
- * Quản lý báo cáo ngày (daily-report-controller):
- *
- *   POST /api/v1/daily-reports/init?reportDate=...      — Khởi tạo báo cáo (idempotent)
- *   GET  /api/v1/daily-reports/{id}                     — Chi tiết báo cáo
- *   GET  /api/v1/daily-reports/{id}/lines               — Danh sách dòng báo cáo
- *   POST /api/v1/daily-reports/{id}/remaining           — Nhập "Còn Lại"
- *   POST /api/v1/daily-reports/{id}/finalize            — Chốt báo cáo
+ *   POST /api/v1/daily-reports/init?reportDate=          — Khởi tạo (idempotent)
+ *   GET  /api/v1/daily-reports/by-date?reportDate=       — Lấy báo cáo theo ngày
+ *   GET  /api/v1/daily-reports/{id}/lines                — Danh sách dòng (per-item)
+ *   POST /api/v1/daily-reports/{id}/finalize             — Chốt báo cáo
  */
 const dailyReportService = {
   /**
-   * Khởi tạo báo cáo ngày (idempotent — an toàn gọi nhiều lần).
-   * Tự động tạo nếu chưa tồn tại, hoặc trả về báo cáo đã có.
-   * @param reportDate Ngày báo cáo (format: YYYY-MM-DD)
+   * Khởi tạo báo cáo ngày — idempotent.
+   * Cũng dùng để refresh cancel_record (qty_opening, qty_received).
    */
   init: (reportDate: string) =>
     axiosClient.post<DailyReport, DailyReport>(
@@ -27,51 +22,7 @@ const dailyReportService = {
     ),
 
   /**
-   * Lấy chi tiết báo cáo theo ID.
-   * @param id UUID báo cáo
-   */
-  getById: (id: string) =>
-    api.get<DailyReport>(`/api/v1/daily-reports/${id}`),
-
-  /**
-   * Lấy danh sách các dòng của báo cáo.
-   * @param id UUID báo cáo
-   */
-  getLines: (id: string) =>
-    api.get<DailyReportLine[]>(`/api/v1/daily-reports/${id}/lines`),
-
-  /**
-   * Nhân viên nhập số lượng "Còn Lại" thực tế sau khi đếm.
-   * @param id                  UUID báo cáo
-   * @param itemId              UUID của dòng báo cáo (DailyReportLine.id)
-   * @param qtyRemainingActual  Số lượng còn lại thực tế
-   * @param note                Ghi chú (tuỳ chọn)
-   */
-  updateRemaining: (
-    id: string,
-    itemId: string,
-    qtyRemainingActual: number,
-    note?: string,
-  ) =>
-    axiosClient.post<DailyReportLine, DailyReportLine>(
-      `/api/v1/daily-reports/${id}/remaining`,
-      null,
-      { params: { itemId, qtyRemainingActual, ...(note ? { note } : {}) } },
-    ),
-
-  /**
-   * Chốt báo cáo — không thể sửa sau khi finalize.
-   * @param id UUID báo cáo
-   */
-  finalize: (id: string) =>
-    axiosClient.post<DailyReport, DailyReport>(
-      `/api/v1/daily-reports/${id}/finalize`,
-      null,
-    ),
-
-  /**
    * Lấy báo cáo theo ngày (không tạo mới nếu chưa có).
-   * GET /api/v1/daily-reports/by-date?reportDate=...
    */
   getByDate: (reportDate: string) =>
     axiosClient.get<DailyReport, DailyReport>(
@@ -80,23 +31,20 @@ const dailyReportService = {
     ),
 
   /**
-   * Lấy danh sách hủy bánh (sản phẩm có shelf_days = 0).
-   * GET /api/v1/daily-reports/{id}/cancel-list
+   * Lấy danh sách các dòng của báo cáo (per-item, đủ 13 cột).
    */
-  getCancelList: (id: string) =>
+  getLines: (id: string) =>
     axiosClient.get<DailyReportLine[], DailyReportLine[]>(
-      `/api/v1/daily-reports/${id}/cancel-list`,
+      `/api/v1/daily-reports/${id}/lines`,
     ),
 
   /**
-   * Nhập số lượng hủy cho 1 item.
-   * POST /api/v1/daily-reports/{id}/cancel?itemId=...&qtyCancelled=...
+   * Chốt báo cáo — không thể sửa sau khi finalize.
    */
-  updateCancel: (id: string, itemId: string, qtyCancelled: number) =>
-    axiosClient.post<DailyReportLine, DailyReportLine>(
-      `/api/v1/daily-reports/${id}/cancel`,
+  finalize: (id: string) =>
+    axiosClient.post<DailyReport, DailyReport>(
+      `/api/v1/daily-reports/${id}/finalize`,
       null,
-      { params: { itemId, qtyCancelled } },
     ),
 };
 

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   Table, Button, DatePicker, Typography,
   message, Spin, InputNumber, Popconfirm, Tooltip,
+  Tag, Alert, Divider, List,
 } from 'antd';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -10,7 +11,7 @@ import type { ProductionPlan, ProductionPlanLine } from '../../types';
 import {
   CheckCircleOutlined, CloseCircleOutlined,
   ReloadOutlined, ExportOutlined, CalendarOutlined,
-  InfoCircleOutlined,
+  InfoCircleOutlined, ExperimentOutlined, ShoppingCartOutlined,
 } from '@ant-design/icons';
 import '../../styles/production-plans.css';
 
@@ -42,11 +43,20 @@ const DayTypeBadge: React.FC<{ type?: string }> = ({ type }) => (
   </span>
 );
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface IngredientCheckResult {
+  allSufficient: boolean;
+  sufficient: Array<{ ingredientName: string; ingredientCode?: string; required: number; available: number; unit?: string }>;
+  shortage: Array<{ ingredientName: string; ingredientCode?: string; required: number; available: number; shortage: number; unit?: string }>;
+  semiNeeds: Array<{ itemName: string; itemCode?: string; requiredQty: number; unit?: string }>;
+}
+
 // ── DailyPlan ─────────────────────────────────────────────────────────────────
 const DailyPlan: React.FC = () => {
   const queryClient = useQueryClient();
   const [selectedDate, setSelectedDate] = useState<string>(dayjs().format('YYYY-MM-DD'));
   const [adjustingLines, setAdjustingLines] = useState<Record<string, number>>({});
+  const [ingredientCheck, setIngredientCheck] = useState<IngredientCheckResult | null>(null);
 
   // ── Queries ─────────────────────────────────────────────────────────────────
   const { data: plan, isLoading, error } = useQuery({
@@ -122,6 +132,38 @@ const DailyPlan: React.FC = () => {
     },
   });
 
+  const checkIngredientsMutation = useMutation({
+    mutationFn: (id: string) => productionService.checkIngredients(id),
+    onSuccess: (res: any) => {
+      const data: IngredientCheckResult = res?.data ?? res;
+      setIngredientCheck(data);
+      if (data.allSufficient) {
+        message.success('Nguyên liệu đủ cho kế hoạch!');
+      } else {
+        message.warning(`Thiếu ${data.shortage?.length ?? 0} nguyên liệu`);
+      }
+    },
+    onError: () => message.error('Không thể kiểm tra nguyên liệu'),
+  });
+
+  const generatePurchaseMutation = useMutation({
+    mutationFn: (id: string) => productionService.generatePurchase(id),
+    onSuccess: (res: any) => {
+      const data = res?.data ?? res;
+      message.success(`Đã tạo phiếu nhập ${data.purchaseCode} — ${data.lineCount} dòng`);
+    },
+    onError: () => message.error('Tạo phiếu nhập thất bại'),
+  });
+
+  const generateTransferMutation = useMutation({
+    mutationFn: (id: string) => productionService.generateTransfer(id),
+    onSuccess: (res: any) => {
+      const data = res?.data ?? res;
+      message.success(`Đã tạo phiếu xuất bếp ${data.transferCode} — ${data.lineCount} dòng`);
+    },
+    onError: () => message.error('Tạo phiếu xuất thất bại'),
+  });
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
   const handleGenerate = () => generateMutation.mutate(selectedDate);
 
@@ -144,6 +186,12 @@ const DailyPlan: React.FC = () => {
   };
 
   // ── State helpers ─────────────────────────────────────────────────────────────
+  // Reset ingredient check when date changes
+  const handleDateChange = (d: any) => {
+    setSelectedDate(d ? d.format('YYYY-MM-DD') : '');
+    setIngredientCheck(null);
+  };
+
   const isDraft = actualPlan?.approvalStatus === 'DRAFT' || actualPlan?.status === 'DRAFT';
   const isApproved = actualPlan?.approvalStatus === 'APPROVED' || actualPlan?.status === 'APPROVED';
   const isRejected = actualPlan?.approvalStatus === 'REJECTED' || actualPlan?.status === 'REJECTED';
@@ -285,7 +333,7 @@ const DailyPlan: React.FC = () => {
             className="pp-datepicker"
             allowClear={false}
             value={dayjs(selectedDate)}
-            onChange={(d) => setSelectedDate(d ? d.format('YYYY-MM-DD') : '')}
+            onChange={handleDateChange}
           />
           <button
             className="pp-btn pp-btn--ghost"
@@ -438,6 +486,143 @@ const DailyPlan: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Ingredient Check Panel */}
+          <div className="pp-card" style={{ marginBottom: 'var(--pp-space-md)' }}>
+            <div className="pp-card__header" style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <ExperimentOutlined style={{ color: 'var(--pp-accent)' }} />
+              <span style={{ fontWeight: 700, fontSize: 'var(--pp-text-sm)' }}>Kiểm Tra Nguyên Liệu</span>
+              <div style={{ flex: 1 }} />
+              <Button
+                size="small"
+                type="primary"
+                ghost
+                loading={checkIngredientsMutation.isPending}
+                onClick={() => checkIngredientsMutation.mutate(actualPlan.id)}
+                icon={<ExperimentOutlined />}
+              >
+                Kiểm tra NL
+              </Button>
+              {ingredientCheck && (
+                <>
+                  {!ingredientCheck.allSufficient && (
+                    <Button
+                      size="small"
+                      type="primary"
+                      danger
+                      loading={generatePurchaseMutation.isPending}
+                      onClick={() => generatePurchaseMutation.mutate(actualPlan.id)}
+                      icon={<ShoppingCartOutlined />}
+                    >
+                      Tạo phiếu nhập kho
+                    </Button>
+                  )}
+                  {ingredientCheck.allSufficient && (
+                    <Button
+                      size="small"
+                      type="primary"
+                      loading={generateTransferMutation.isPending}
+                      onClick={() => generateTransferMutation.mutate(actualPlan.id)}
+                      icon={<ExportOutlined />}
+                    >
+                      Tạo phiếu xuất bếp
+                    </Button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {ingredientCheck && (
+              <div style={{ padding: '12px 16px' }}>
+                {/* Summary tag */}
+                {ingredientCheck.allSufficient ? (
+                  <Alert
+                    type="success"
+                    showIcon
+                    message="Nguyên liệu đủ — có thể tạo phiếu xuất bếp"
+                    style={{ marginBottom: 12 }}
+                  />
+                ) : (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    message={`Thiếu ${ingredientCheck.shortage?.length ?? 0} nguyên liệu — cần tạo phiếu nhập`}
+                    style={{ marginBottom: 12 }}
+                  />
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: ingredientCheck.shortage?.length > 0 ? '1fr 1fr' : '1fr', gap: 16 }}>
+                  {/* Shortage */}
+                  {ingredientCheck.shortage?.length > 0 && (
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--pp-text-xs)', color: '#ff4d4f', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Thiếu ({ingredientCheck.shortage.length})
+                      </div>
+                      <List
+                        size="small"
+                        dataSource={ingredientCheck.shortage}
+                        renderItem={(row: any) => (
+                          <List.Item style={{ padding: '4px 0', borderBottom: '1px solid var(--pp-paper-3)' }}>
+                            <div style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12 }}>{row.itemName}</Text>
+                              {row.itemCode && (
+                                <Text type="secondary" style={{ fontSize: 11, marginLeft: 6 }}>{row.itemCode}</Text>
+                              )}
+                            </div>
+                            <div style={{ textAlign: 'right', fontFamily: 'var(--pp-font-mono)', fontSize: 12 }}>
+                              <Tag color="error" style={{ margin: 0 }}>
+                                -{Number(row.shortage).toLocaleString('vi')} {row.unit ?? ''}
+                              </Tag>
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {/* Sufficient */}
+                  {ingredientCheck.sufficient?.length > 0 && (
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 'var(--pp-text-xs)', color: '#52c41a', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Đủ ({ingredientCheck.sufficient.length})
+                      </div>
+                      <List
+                        size="small"
+                        dataSource={ingredientCheck.sufficient}
+                        renderItem={(row: any) => (
+                          <List.Item style={{ padding: '4px 0', borderBottom: '1px solid var(--pp-paper-3)' }}>
+                            <div style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12 }}>{row.itemName}</Text>
+                            </div>
+                            <Text type="secondary" style={{ fontSize: 11, fontFamily: 'var(--pp-font-mono)' }}>
+                              {Number(row.available).toLocaleString('vi')} / {Number(row.needed).toLocaleString('vi')} {row.unit ?? ''}
+                            </Text>
+                          </List.Item>
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* BTP needs */}
+                {ingredientCheck.semiNeeds?.length > 0 && (
+                  <>
+                    <Divider style={{ margin: '12px 0' }} />
+                    <div style={{ fontWeight: 700, fontSize: 'var(--pp-text-xs)', color: 'var(--pp-accent)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Bán thành phẩm cần làm ({ingredientCheck.semiNeeds.length})
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {ingredientCheck.semiNeeds.map((s: any, i) => (
+                        <Tag key={i} color="blue" style={{ margin: 0 }}>
+                          {s.itemName}: <strong>{Number(s.needed ?? s.requiredQty).toLocaleString('vi')}</strong> {s.unit ?? ''}
+                        </Tag>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Standalone products */}
           {groupedLines.standalone.length > 0 &&

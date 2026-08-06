@@ -191,6 +191,41 @@ const productionService = {
       `/admin/production/sheet-cake/orders/${id}/lock-production`,
       data ?? {},
     ),
+
+  // ── KIỂM TRA NGUYÊN LIỆU ─────────────────────────
+
+  /**
+   * GET /api/v1/production/plans/{id}/ingredient-check
+   * Kiểm tra nguyên liệu đủ/thiếu cho kế hoạch.
+   * Returns: { allSufficient, sufficient[], shortage[], semiNeeds[] }
+   */
+  checkIngredients: (id: string) =>
+    api.get<{
+      allSufficient: boolean;
+      sufficient: Array<{ itemName: string; itemCode?: string; needed: number; available: number; unit?: string }>;
+      shortage: Array<{ itemName: string; itemCode?: string; needed: number; available: number; shortage: number; unit?: string }>;
+      semiNeeds: Array<{ itemName: string; itemCode?: string; needed: number; inKitchen: number; shortage: number; unit?: string }>;
+    }>(`/api/v1/production/plans/${id}/ingredient-check`),
+
+  /**
+   * POST /api/v1/production/plans/{id}/generate-purchase
+   * Tạo phiếu nhập kho cho nguyên liệu còn thiếu.
+   * Returns: { purchaseCode, purchaseId, status, lineCount }
+   */
+  generatePurchase: (id: string) =>
+    api.post<{ purchaseCode: string; purchaseId: string; status: string; lineCount: number }>(
+      `/api/v1/production/plans/${id}/generate-purchase`,
+    ),
+
+  /**
+   * POST /api/v1/production/plans/{id}/generate-transfer
+   * Tạo phiếu xuất kho nguyên liệu ra bếp (khi đủ NL).
+   * Returns: { transferCode, transferId, status, lineCount }
+   */
+  generateTransfer: (id: string) =>
+    api.post<{ transferCode: string; transferId: string; status: string; lineCount: number }>(
+      `/api/v1/production/plans/${id}/generate-transfer`,
+    ),
 };
 
 export default productionService;

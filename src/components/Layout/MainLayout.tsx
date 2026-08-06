@@ -63,7 +63,10 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/prod-adjustments': 'Điều Chỉnh Sản Xuất',
   '/stock-summary': 'Tồn Kho',
   '/inventory-requests': 'Phiếu Kho',
+  '/cancel-list': 'Danh Sách Hủy Bánh',
   '/reports': 'Báo Cáo',
+  '/reports/daily': 'Báo Cáo Ngày (NV)',
+  '/reports/admin': 'Báo Cáo Admin',
   '/users': 'Tài Khoản Người Dùng',
   '/roles': 'Phân Quyền (Roles)',
   '/activity-log': 'Nhật Ký Hoạt Động',
@@ -123,9 +126,17 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: 'Cửa Hàng',
+    items: [
+      { key: '/cancel-list', label: '🗑️ Danh sách hủy', screenCode: 'DAILY_REPORT' },
+    ],
+  },
+  {
     label: 'Báo cáo',
     items: [
-      { key: '/reports', label: '📊 Báo cáo', screenCode: 'DAILY_REPORT' },
+      { key: '/reports/daily', label: '📋 BC Ngày (NV)', screenCode: 'DAILY_REPORT' },
+      { key: '/reports/admin', label: '📊 BC Admin',     screenCode: 'DAILY_REPORT' },
+      { key: '/reports',      label: '📁 BC Tổng hợp',  screenCode: 'DAILY_REPORT' },
     ],
   },
   {
