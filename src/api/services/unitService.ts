@@ -8,7 +8,7 @@ import type {
 /**
  * unitService
  *
- *   GET    /api/v1/units                          — Danh sách đơn vị
+ *   GET    /api/v1/code-values?groupKey=UNIT&size=100&sort=sortOrder,asc — Danh sách đơn vị
  *   POST   /api/v1/units                          — Thêm đơn vị
  *   PUT    /api/v1/units/{code}                   — Sửa đơn vị
  *   DELETE /api/v1/units/{code}                   — Xóa đơn vị
@@ -21,8 +21,10 @@ import type {
 const unitService = {
   // ── Units ──────────────────────────────────────────────────────────────────
 
-  getAll: () =>
-    api.get<Unit[]>('/api/v1/units'),
+  getAll: async (): Promise<Unit[]> => {
+    const res: any = await api.get('/api/v1/code-values?groupKey=UNIT&size=100&sort=sortOrder,asc');
+    return Array.isArray(res) ? res : (res?.content ?? []);
+  },
 
   create: (data: CreateUnitRequest) =>
     api.post<Unit>('/api/v1/units', data),

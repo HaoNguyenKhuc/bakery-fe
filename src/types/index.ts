@@ -305,6 +305,10 @@ export interface ItemRequest {
   // Ingredient fields
   ingredientType?: string;
   defaultSupplier?: string | null;
+  defaultSupplierId?: string | null;
+
+  // Cost — nhập tay cho INGREDIENT; SEMI_PRODUCT tính tự động từ công thức
+  unitCost?: number | null;
 
   // Product fields
   productType?: ProductType;

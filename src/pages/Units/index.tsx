@@ -132,7 +132,7 @@ const ConversionModal: React.FC<ConversionModalProps> = ({
                 onChange={updatePreview}
                 options={units.map((u) => ({
                   value: u.code,
-                  label: `${u.code} — ${u.name}`,
+                  label: u.name || u.code,
                 }))}
               />
             </Form.Item>
@@ -147,7 +147,7 @@ const ConversionModal: React.FC<ConversionModalProps> = ({
                 onChange={updatePreview}
                 options={units.map((u) => ({
                   value: u.code,
-                  label: `${u.code} — ${u.name}`,
+                  label: u.name || u.code,
                 }))}
               />
             </Form.Item>

@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { itemService, itemGroupService } from '../../../api/services';
 import type { Item, ItemType, ItemGroup } from '../../../types';
+import { useAuthStore } from '../../../store/authStore';
 
 const { Title, Text } = Typography;
 
@@ -81,6 +82,7 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 const ProductList: React.FC = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin());
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [activeItemType, setActiveItemType] = useState<ItemType>('PRODUCT');
@@ -257,6 +259,22 @@ const ProductList: React.FC = () => {
       responsive: ['sm' as const],
       render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
     },
+    ...(isSuperAdmin ? [{
+      title: 'Giá vốn',
+      key: 'unitCost',
+      width: 130,
+      align: 'right' as const,
+      responsive: ['md' as const],
+      render: (_: unknown, record: any) => {
+        const val = record.unitCost ?? record.lastPrice;
+        if (val == null) return <Text type="secondary">—</Text>;
+        return (
+          <Text style={{ fontWeight: 500, color: '#b45309' }}>
+            {Number(val).toLocaleString('vi-VN')} đ
+          </Text>
+        );
+      },
+    }] : []),
     {
       title: 'Trạng thái',
       dataIndex: 'approvalStatus',
