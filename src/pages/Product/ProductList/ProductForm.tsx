@@ -138,6 +138,7 @@ const ProductForm: React.FC = () => {
         splittable: editProduct.splittable ?? false,
         unitSize: editProduct.unitSize ?? undefined,
         unitCost: editProduct.unitCost ?? editProduct.lastPrice ?? undefined,
+        shelfDays: editProduct.shelfDays ?? undefined,
         recipe: recipe as any,
       });
     } else if (!isEdit) {
@@ -152,6 +153,7 @@ const ProductForm: React.FC = () => {
       const payload = {
         ...values,
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
+        shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
       };
       let savedItem: any;
       if (isEdit) {
@@ -385,6 +387,31 @@ const ProductForm: React.FC = () => {
                 </>
               );
             }}
+          </Form.Item>
+
+          {/* Hạn sử dụng (ngày) — chỉ hiện cho PRODUCT */}
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
+            {({ getFieldValue }) =>
+              getFieldValue('itemType') === 'PRODUCT' ? (
+                <Row gutter={24}>
+                  <Col xs={24} md={8}>
+                    <Form.Item
+                      name="shelfDays"
+                      label="Hạn sử dụng (ngày)"
+                      tooltip="0 = trong ngày. Để trống nếu không có hạn."
+                    >
+                      <InputNumber
+                        min={0}
+                        step={1}
+                        precision={0}
+                        style={{ width: '100%' }}
+                        placeholder="0 = trong ngày"
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              ) : null
+            }
           </Form.Item>
 
           {/* Giá vốn — INGREDIENT và SEMI_PRODUCT */}
