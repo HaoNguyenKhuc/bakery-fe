@@ -22,7 +22,7 @@ const unitService = {
   // ── Units ──────────────────────────────────────────────────────────────────
 
   getAll: async (): Promise<Unit[]> => {
-    const res: any = await api.get('/api/v1/code-values?groupKey=UNIT&size=100&sort=sortOrder,asc');
+    const res: any = await api.get('/api/v1/units');
     return Array.isArray(res) ? res : (res?.content ?? []);
   },
 
