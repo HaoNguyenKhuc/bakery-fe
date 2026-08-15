@@ -277,13 +277,11 @@ export interface Item extends BaseEntity {
   rejectedReason: string | null;
 
   // Specific to Ingredient
-  ingredientType?: string;
   defaultSupplier?: string | null; // or ReferenceValue
   lastPrice?: number;
   lastPriceDate?: string;
 
   // Specific to Product
-  productType?: ProductType | null;
   productCategory?: string | null;
   sellingPrice?: number | null;
 
@@ -301,13 +299,13 @@ export interface ItemRequest {
   itemGroupId?: string | null;
   splittable?: boolean;
   unitSize?: number | null;
+  /** Đơn vị cơ sở kết hợp unitSize: vd unit=HOP, unitSize=5, baseUnit=KG → 1 HOP = 5 KG */
+  baseUnit?: string | null;
 
   // Ingredient fields
-  ingredientType?: string;
   defaultSupplier?: string | null;
 
   // Product fields
-  productType?: ProductType;
   productCategory?: string;
   sellingPrice?: number;
 

@@ -77,14 +77,13 @@ const ProductForm: React.FC = () => {
         code: editProduct.code,
         name: editProduct.name,
         itemType: editProduct.itemType || 'PRODUCT',
-        productType: editProduct.productType || undefined,
         productCategory: editProduct.productCategory || undefined,
         unit: editProduct.unit,
-        ingredientType: editProduct.ingredientType || undefined,
         defaultSupplier: editProduct.defaultSupplier || undefined,
         itemGroupId: editProduct.itemGroupId || undefined,
         splittable: editProduct.splittable ?? false,
         unitSize: editProduct.unitSize ?? undefined,
+        baseUnit: editProduct.baseUnit || undefined,
         recipe: recipe as any,
       });
     } else if (!isEdit) {
@@ -299,6 +298,16 @@ const ProductForm: React.FC = () => {
                 ) : null
               }
             </Form.Item>
+
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="baseUnit"
+                label="Đơn vị cơ sở"
+                tooltip="Điền khi unit là đơn vị đóng gói. Vd: unit=HOP, unitSize=5, baseUnit=KG → hệ thống hiểu 1 HOP = 5 KG khi tính giá công thức."
+              >
+                <Input placeholder="VD: KG, G, L, ML..." style={{ textTransform: 'uppercase' }} />
+              </Form.Item>
+            </Col>
           </Row>
 
           {/* Conditional extra fields for INGREDIENT */}
@@ -309,11 +318,6 @@ const ProductForm: React.FC = () => {
                 <>
                   <Divider />
                   <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
-                        <Input placeholder="VD: Bột, Đường, Trứng..." />
-                      </Form.Item>
-                    </Col>
                     <Col xs={24} md={12}>
                       <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
                         <Input placeholder="VD: Công ty ABC" />
@@ -330,25 +334,7 @@ const ProductForm: React.FC = () => {
             {({ getFieldValue }) => {
               const t = getFieldValue('itemType');
               if (t !== 'PRODUCT' && t !== 'SEMI_PRODUCT') return null;
-              return (
-                <>
-                  <Divider />
-                  <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                      <Form.Item
-                        name="productType"
-                        label="Loại Sản Phẩm"
-                        rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
-                      >
-                        <Select placeholder="Chọn loại">
-                          <Select.Option value="STANDARD">STANDARD (Theo cái)</Select.Option>
-                          <Select.Option value="SHEET_CAKE">SHEET_CAKE (Theo kg)</Select.Option>
-                        </Select>
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                </>
-              );
+              return null;
             }}
           </Form.Item>
         </Card>
