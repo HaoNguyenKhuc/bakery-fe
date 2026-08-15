@@ -284,6 +284,7 @@ export interface Item extends BaseEntity {
   // Specific to Product
   productCategory?: string | null;
   sellingPrice?: number | null;
+  shelfDays?: number | null;
 
   // Item Group (only for PRODUCT)
   itemGroup?: ReferenceValue | null;
@@ -304,6 +305,13 @@ export interface ItemRequest {
 
   // Ingredient fields
   defaultSupplier?: string | null;
+  defaultSupplierId?: string | null;
+
+  // Cost — nhập tay cho INGREDIENT; SEMI_PRODUCT tính tự động từ công thức
+  unitCost?: number | null;
+
+  // Shelf life — 0 = trong ngày
+  shelfDays?: number | null;
 
   // Product fields
   productCategory?: string;

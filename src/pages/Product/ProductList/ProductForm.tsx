@@ -9,7 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemService, recipeService, itemGroupService, masterService } from '../../../api/services';
+import { itemService, recipeService, itemGroupService, supplierService } from '../../../api/services';
 import unitService from '../../../api/services/unitService';
 import type { ProductRequest } from '../../../types';
 
@@ -50,7 +50,13 @@ const ProductForm: React.FC = () => {
     queryKey: ['units'],
     queryFn: () => unitService.getAll(),
   });
-  const units = unitsData;
+  const units = extractArray(unitsData);
+
+  const { data: suppliersData } = useQuery({
+    queryKey: ['suppliers', 'all'],
+    queryFn: () => supplierService.getAll(),
+  });
+  const suppliers = extractArray(suppliersData);
 
   const { data: itemData, isLoading: loadingItem } = useQuery({
     queryKey: ['item', id],
@@ -63,16 +69,62 @@ const ProductForm: React.FC = () => {
   useEffect(() => {
     if (isEdit && itemData) {
       const editProduct: any = itemData;
+
+      // Tìm itemGroupId: nếu API trả về object itemGroup { key, name }, khớp key với itemGroups để lấy ID
+      let itemGroupId = editProduct.itemGroupId || editProduct.itemGroup?.id;
+      if (!itemGroupId && editProduct.itemGroup) {
+        const groupKey = editProduct.itemGroup.key || editProduct.itemGroup.code;
+        if (groupKey) {
+          const matched = itemGroups.find(
+            (g: any) => g.code === groupKey || g.id === groupKey
+          );
+          if (matched) {
+            itemGroupId = matched.id;
+          }
+        }
+      }
+
+      // Tìm defaultSupplierId từ defaultSupplier (string hoặc object { key, name })
+      let defaultSupplierId = editProduct.defaultSupplierId || editProduct.defaultSupplier?.id;
+      if (!defaultSupplierId && editProduct.defaultSupplier) {
+        if (typeof editProduct.defaultSupplier === 'string') {
+          // Trường hợp là string (ID, code, hoặc name)
+          const matched = suppliers.find(
+            (s: any) => s.id === editProduct.defaultSupplier
+              || s.code === editProduct.defaultSupplier
+              || s.name === editProduct.defaultSupplier
+          );
+          if (matched) defaultSupplierId = matched.id;
+        } else if (typeof editProduct.defaultSupplier === 'object') {
+          // Trường hợp là object { key: "SG", name: "SG" }
+          const supplierKey = editProduct.defaultSupplier.key || editProduct.defaultSupplier.code;
+          const matched = suppliers.find(
+            (s: any) =>
+              (supplierKey && (s.code === supplierKey || s.id === supplierKey))
+              || s.name === editProduct.defaultSupplier.name
+          );
+          if (matched) defaultSupplierId = matched.id;
+        }
+      }
+
+      const rawRecipe = editProduct.recipe || editProduct.activeRecipe;
       let recipe = undefined;
-      if (editProduct.activeRecipe) {
+      if (rawRecipe && Array.isArray(rawRecipe.lines)) {
         recipe = {
-          ...editProduct.activeRecipe,
-          lines: editProduct.activeRecipe.lines.map((l: any) => ({
-            ...l,
-            itemId: l.itemId,
-          }))
+          ...rawRecipe,
+          lines: rawRecipe.lines.map((l: any) => {
+            const targetKey = l.itemId || l.item?.id || l.item?.key;
+            const matchedItem = allItems.find(
+              (i: any) => i.id === targetKey || i.code === targetKey
+            );
+            return {
+              ...l,
+              itemId: matchedItem ? matchedItem.id : targetKey,
+            };
+          }),
         };
       }
+
       form.setFieldsValue({
         code: editProduct.code,
         name: editProduct.name,
@@ -84,12 +136,19 @@ const ProductForm: React.FC = () => {
         splittable: editProduct.splittable ?? false,
         unitSize: editProduct.unitSize ?? undefined,
         baseUnit: editProduct.baseUnit || undefined,
+        // ingredientType: editProduct.ingredientType || undefined,
+        defaultSupplierId: defaultSupplierId || undefined,
+        // itemGroupId: itemGroupId || undefined,
+        // splittable: editProduct.splittable ?? false,
+        // unitSize: editProduct.unitSize ?? undefined,
+        unitCost: editProduct.unitCost ?? editProduct.lastPrice ?? undefined,
+        shelfDays: editProduct.shelfDays ?? undefined,
         recipe: recipe as any,
       });
     } else if (!isEdit) {
       form.resetFields();
     }
-  }, [isEdit, itemData, form]);
+  }, [isEdit, itemData, itemGroups, allItems, suppliers, form]);
 
   // ── Mutation ─────────────────────────────────────────────────────────────────
 
@@ -98,6 +157,7 @@ const ProductForm: React.FC = () => {
       const payload = {
         ...values,
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
+        shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
       };
       let savedItem: any;
       if (isEdit) {
@@ -176,7 +236,7 @@ const ProductForm: React.FC = () => {
       {/* Main Form */}
       <Form form={form} layout="vertical" onFinish={handleFinish}>
         <Card
-          title="Tạo sản phẩm mới"
+          title="Thông Tin Hàng Hoá"
           loading={isEdit && loadingItem}
           style={{ marginBottom: 24 }}
         >
@@ -256,7 +316,7 @@ const ProductForm: React.FC = () => {
                   showSearch
                   optionFilterProp="label"
                   options={units.map((u: any) => ({
-                    label: `${u.code} — ${u.name}`,
+                    label: u.name || u.code,
                     value: u.code,
                   }))}
                 />
@@ -310,7 +370,7 @@ const ProductForm: React.FC = () => {
             </Col>
           </Row>
 
-          {/* Conditional extra fields for INGREDIENT */}
+          {/* Conditional fields for INGREDIENT */}
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
             {({ getFieldValue }) => {
               if (getFieldValue('itemType') !== 'INGREDIENT') return null;
@@ -321,6 +381,22 @@ const ProductForm: React.FC = () => {
                     <Col xs={24} md={12}>
                       <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
                         <Input placeholder="VD: Công ty ABC" />
+                      {/* <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
+                        <Input placeholder="VD: Bột, Đường, Trứng..." /> */}
+                      </Form.Item> 
+                    </Col>
+                    <Col xs={24} md={12}>
+                      <Form.Item name="defaultSupplierId" label="Nhà Cung Cấp">
+                        <Select
+                          placeholder="-- Chọn nhà cung cấp --"
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          options={suppliers.map((s: any) => ({
+                            label: `[${s.code}] ${s.name}`,
+                            value: s.id,
+                          }))}
+                        />
                       </Form.Item>
                     </Col>
                   </Row>
@@ -329,12 +405,56 @@ const ProductForm: React.FC = () => {
             }}
           </Form.Item>
 
-          {/* Conditional extra fields for PRODUCT / SEMI_PRODUCT */}
+          {/* Hạn sử dụng (ngày) — chỉ hiện cho PRODUCT */}
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
+            {({ getFieldValue }) =>
+              getFieldValue('itemType') === 'PRODUCT' ? (
+                <Row gutter={24}>
+                  <Col xs={24} md={8}>
+                    <Form.Item
+                      name="shelfDays"
+                      label="Hạn sử dụng (ngày)"
+                      tooltip="0 = trong ngày. Để trống nếu không có hạn."
+                    >
+                      <InputNumber
+                        min={0}
+                        step={1}
+                        precision={0}
+                        style={{ width: '100%' }}
+                        placeholder="0 = trong ngày"
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              ) : null
+            }
+          </Form.Item>
+
+          {/* Giá vốn — INGREDIENT và SEMI_PRODUCT */}
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
             {({ getFieldValue }) => {
               const t = getFieldValue('itemType');
-              if (t !== 'PRODUCT' && t !== 'SEMI_PRODUCT') return null;
-              return null;
+              // if (t !== 'PRODUCT' && t !== 'SEMI_PRODUCT') return null;
+              // return null;
+              if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
+              return (
+                <Row gutter={24}>
+                  <Col xs={24} md={12}>
+                    <Form.Item name="unitCost" label="Giá vốn (đ/đvt) — Nhập tay">
+                      <InputNumber
+                        min={0}
+                        step={1000}
+                        style={{ width: '100%' }}
+                        placeholder="0"
+                        formatter={(value) =>
+                          value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''
+                        }
+                        parser={(value) => value?.replace(/,/g, '') as any}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
             }}
           </Form.Item>
         </Card>
@@ -414,15 +534,24 @@ const ProductForm: React.FC = () => {
                       {
                         title: 'Đơn Vị',
                         dataIndex: 'name',
-                        width: 110,
+                        width: 140,
                         render: (name: number, field: any) => (
                           <Form.Item
                             {...field}
                             name={[name, 'unit']}
-                            rules={[{ required: true, message: 'Nhập đơn vị' }]}
+                            rules={[{ required: true, message: 'Chọn đơn vị' }]}
                             style={{ margin: 0 }}
                           >
-                            <Input size="small" placeholder="Đơn vị" />
+                            <Select
+                              size="small"
+                              placeholder="Đơn vị"
+                              showSearch
+                              optionFilterProp="label"
+                              options={units.map((u: any) => ({
+                                label: u.name || u.code,
+                                value: u.code,
+                              }))}
+                            />
                           </Form.Item>
                         ),
                       },
