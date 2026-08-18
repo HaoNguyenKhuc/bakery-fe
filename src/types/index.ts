@@ -257,6 +257,29 @@ export interface ItemGroupRequest {
 }
 
 // ─────────────────────────────────────────────
+// ITEM PACKAGING
+// ─────────────────────────────────────────────
+
+/** Quy cách đóng gói của một nguyên liệu.
+ * VD: Bao 10kg (code=BAO10, qtyPerPack=10) — unit tính theo item.unit
+ */
+export interface ItemPackaging {
+  id?: string;           // undefined khi tạo mới, có khi load từ BE
+  code: string;          // 'BAO10', 'THUNG12'
+  name: string;          // 'Bao 10kg', 'Thùng 12 chai'
+  qtyPerPack: number;    // số lượng tính theo item.unit
+  isDefault: boolean;
+}
+
+/** Body gửi lên PUT /api/v1/items/{id}/packagings */
+export interface ItemPackagingRequest {
+  code: string;
+  name: string;
+  qtyPerPack: number;
+  isDefault: boolean;
+}
+
+// ─────────────────────────────────────────────
 // PRODUCT
 // ─────────────────────────────────────────────
 
@@ -290,6 +313,8 @@ export interface Item extends BaseEntity {
   itemGroup?: ReferenceValue | null;
   activeRecipe?: Recipe | null;
   recipe?: RecipeRequest | null;
+  /** Danh sách quy cách đóng gói — chỉ có cho INGREDIENT, BE trả về trong getById */
+  packagings?: ItemPackaging[];
 }
 
 export interface ItemRequest {
@@ -955,6 +980,10 @@ export interface PurchaseRequestLine {
   unitCost: number;
   sortOrder: number;
   note?: string | null;
+  /** ID của ItemPackaging nếu nhập theo bao/thùng */
+  packagingId?: string | null;
+  /** Số bao/thùng — FE tự tính quantity = purchaseQty × packaging.qtyPerPack */
+  purchaseQty?: number | null;
 }
 
 export interface PurchaseRequest {
@@ -1119,6 +1148,13 @@ export interface StockLotDetail {
   receivedDate: string;
   expiryDate?: string | null;
   createdAt: string;
+  /** Số bao/thùng ban đầu khi nhập (nếu nhập theo quy cách) */
+  qtyReceivedPack?: number;
+  /** Quy cách đóng gói liên kết với lot này */
+  packaging?: {
+    name: string;
+    qtyPerPack: number;
+  } | null;
 }
 
 export interface InventoryStockResponse {

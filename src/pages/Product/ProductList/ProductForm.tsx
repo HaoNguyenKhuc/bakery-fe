@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Form, Select, Input, InputNumber, Row, Col, Card, Button,
   Space, message, Typography, Divider, Tag, Table, Popconfirm, Checkbox
@@ -11,7 +11,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemService, recipeService, itemGroupService, supplierService } from '../../../api/services';
 import unitService from '../../../api/services/unitService';
-import type { ProductRequest } from '../../../types';
+import type { ProductRequest, ItemPackaging, ItemPackagingRequest } from '../../../types';
 
 const { Title, Text } = Typography;
 
@@ -29,6 +29,12 @@ const ProductForm: React.FC = () => {
   const isEdit = !!id;
   const [form] = Form.useForm<ProductRequest>();
   const queryClient = useQueryClient();
+
+  // ── Packaging State ───────────────────────────────────────────────────────────
+  /** Row trong bảng đóng gói — bao gồm _key để dùng làm React key */
+  type PackagingRow = ItemPackagingRequest & { _key: string };
+  const [packagings, setPackagings] = useState<PackagingRow[]>([]);
+  const [savingPackagings, setSavingPackagings] = useState(false);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -150,6 +156,25 @@ const ProductForm: React.FC = () => {
     }
   }, [isEdit, itemData, itemGroups, allItems, suppliers, form]);
 
+  // ── Packaging Sync — useEffect riêng, chỉ watch itemData ─────────────────────────
+  // Tách khỏi useEffect chính để tránh vòng lặp vô tận do allItems tạo array mới mỗi render
+  useEffect(() => {
+    if (isEdit && itemData) {
+      const rawPackagings: ItemPackaging[] = (itemData as any).packagings ?? [];
+      setPackagings(rawPackagings.map(p => ({
+        // Dùng p.id || p.code — không dùng Date.now() để key ổn định
+        _key: p.id || p.code,
+        code: p.code,
+        name: p.name,
+        qtyPerPack: p.qtyPerPack,
+        isDefault: !!p.isDefault,
+      })));
+    } else if (!isEdit) {
+      setPackagings([]);
+    }
+  }, [isEdit, itemData]); // chỉ chạy khi itemData thay đổi thực sự
+
+
   // ── Mutation ─────────────────────────────────────────────────────────────────
 
   const mutation = useMutation({
@@ -185,7 +210,20 @@ const ProductForm: React.FC = () => {
       }
       return savedItem;
     },
-    onSuccess: () => {
+    onSuccess: async (savedItem: any) => {
+      // 3e — Create flow: nếu tạo mới INGREDIENT + có packaging rows → lưu sau khi có ID
+      const newId = savedItem?.id || savedItem?.data?.id;
+      const itemType = form.getFieldValue('itemType');
+      if (!isEdit && newId && itemType === 'INGREDIENT' && packagings.length > 0) {
+        const valid = packagings.filter(p => p.code.trim() && p.name.trim() && p.qtyPerPack > 0);
+        if (valid.length > 0) {
+          try {
+            await itemService.updatePackagings(newId, valid.map(({ _key, ...r }) => r));
+          } catch {
+            message.warning('Hàng hoá đã tạo, nhưng lưu đóng gói thất bại. Vào chỉnh sửa để thêm lại.');
+          }
+        }
+      }
       message.success(isEdit ? 'Cập nhật thành công' : 'Tạo mới thành công');
       queryClient.invalidateQueries({ queryKey: ['items'] });
       navigate('/products');
@@ -198,6 +236,63 @@ const ProductForm: React.FC = () => {
       }
     }
   });
+
+  // ── Packaging Handlers (3d) ───────────────────────────────────────────────────
+
+  /** Thêm 1 dòng trống vào cuối bảng đóng gói */
+  const handleAddPackagingRow = () => {
+    setPackagings(prev => [...prev, {
+      _key: `new_${Date.now()}`,
+      code: '',
+      name: '',
+      qtyPerPack: 1,
+      isDefault: prev.length === 0, // Row đầu tiên tự là mặc định
+    }]);
+  };
+
+  /** Cập nhật 1 field của 1 row */
+  const handlePackagingChange = (idx: number, field: keyof ItemPackagingRequest, value: any) => {
+    setPackagings(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  /** Mutual-exclusive isDefault: tick row này → tự bỏ tick tất cả row khác */
+  const handlePackagingDefaultChange = (clickedIdx: number, checked: boolean) => {
+    setPackagings(prev => prev.map((r, i) => ({
+      ...r,
+      isDefault: checked ? (i === clickedIdx) : (i === clickedIdx ? false : r.isDefault),
+    })));
+  };
+
+  /** Xóa 1 row. Nếu xóa isDefault → tự set row đầu tiên còn lại làm mặc định */
+  const handleRemovePackagingRow = (idx: number) => {
+    setPackagings(prev => {
+      const wasDefault = prev[idx]?.isDefault;
+      const next = prev.filter((_, i) => i !== idx);
+      if (wasDefault && next.length > 0) {
+        next[0] = { ...next[0], isDefault: true };
+      }
+      return next;
+    });
+  };
+
+  /** Gọi PUT /api/v1/items/{id}/packagings — chỉ dùng khi isEdit */
+  const handleSavePackagings = async () => {
+    const valid = packagings.filter(p => p.code.trim() && p.name.trim() && p.qtyPerPack > 0);
+    if (!valid.length) {
+      message.error('Cần ít nhất 1 quy cách có đầy đủ Mã, Tên và Qty/pack!');
+      return;
+    }
+    setSavingPackagings(true);
+    try {
+      await itemService.updatePackagings(id!, valid.map(({ _key, ...rest }) => rest));
+      message.success('Đã lưu quy cách đóng gói ✓');
+      queryClient.invalidateQueries({ queryKey: ['item', id] });
+    } catch {
+      message.error('Lưu đóng gói thất bại, vui lòng thử lại.');
+    } finally {
+      setSavingPackagings(false);
+    }
+  };
 
   const handleFinish = (values: any) => {
     mutation.mutate(values);
@@ -381,9 +476,9 @@ const ProductForm: React.FC = () => {
                     <Col xs={24} md={12}>
                       <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
                         <Input placeholder="VD: Công ty ABC" />
-                      {/* <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
+                        {/* <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
                         <Input placeholder="VD: Bột, Đường, Trứng..." /> */}
-                      </Form.Item> 
+                      </Form.Item>
                     </Col>
                     <Col xs={24} md={12}>
                       <Form.Item name="defaultSupplierId" label="Nhà Cung Cấp">
@@ -454,6 +549,139 @@ const ProductForm: React.FC = () => {
                     </Form.Item>
                   </Col>
                 </Row>
+              );
+            }}
+          </Form.Item>
+
+          {/* ── Đóng Gói Section — chỉ hiện khi INGREDIENT ── */}
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType || prev.unit !== cur.unit}
+          >
+            {({ getFieldValue }) => {
+              if (getFieldValue('itemType') !== 'INGREDIENT') return null;
+              const currentUnit = getFieldValue('unit') || '?';
+
+              const thSt: React.CSSProperties = {
+                padding: '6px 8px',
+                fontWeight: 600,
+                fontSize: 12,
+                color: '#64748b',
+                borderBottom: '1px solid #e2e8f0',
+                textAlign: 'left',
+                background: '#f8fafc',
+              };
+              const tdSt: React.CSSProperties = {
+                padding: '4px 6px',
+                borderBottom: '1px solid #f1f5f9',
+                verticalAlign: 'middle',
+              };
+
+              return (
+                <>
+                  <Divider />
+
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <Text strong>
+                      📦 Đóng gói{' '}
+                      <Text type="secondary" style={{ fontWeight: 400, fontSize: 12 }}>
+                        (đơn vị: {currentUnit})
+                      </Text>
+                    </Text>
+                    <Button size="small" icon={<PlusOutlined />} onClick={handleAddPackagingRow}>
+                      Thêm
+                    </Button>
+                  </div>
+
+                  {/* Table */}
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th style={thSt}>Mã</th>
+                        <th style={thSt}>Tên đóng gói</th>
+                        <th style={{ ...thSt, width: 120, textAlign: 'right' }}>Qty/pack</th>
+                        <th style={{ ...thSt, width: 84, textAlign: 'center' }}>Mặc định</th>
+                        <th style={{ ...thSt, width: 40, borderBottom: '1px solid #e2e8f0' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {packagings.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            style={{ padding: '12px 8px', color: '#94a3b8', textAlign: 'center', fontSize: 12 }}
+                          >
+                            Chưa có đóng gói — nhấn &quot;+ Thêm&quot; để bắt đầu
+                          </td>
+                        </tr>
+                      ) : (
+                        packagings.map((row, idx) => (
+                          <tr key={row._key}>
+                            <td style={tdSt}>
+                              <Input
+                                size="small"
+                                value={row.code}
+                                placeholder="BAO10"
+                                style={{ width: 80 }}
+                                onChange={e => handlePackagingChange(idx, 'code', e.target.value)}
+                              />
+                            </td>
+                            <td style={tdSt}>
+                              <Input
+                                size="small"
+                                value={row.name}
+                                placeholder="Bao 10kg"
+                                style={{ width: 160 }}
+                                onChange={e => handlePackagingChange(idx, 'name', e.target.value)}
+                              />
+                            </td>
+                            <td style={{ ...tdSt, textAlign: 'right' }}>
+                              <InputNumber
+                                size="small"
+                                min={1}
+                                step={1}
+                                value={row.qtyPerPack}
+                                style={{ width: 90 }}
+                                onChange={v => handlePackagingChange(idx, 'qtyPerPack', v ?? 0)}
+                              />
+                            </td>
+                            <td style={{ ...tdSt, textAlign: 'center' }}>
+                              <Checkbox
+                                checked={row.isDefault}
+                                onChange={e => handlePackagingDefaultChange(idx, e.target.checked)}
+                              />
+                            </td>
+                            <td style={{ ...tdSt, textAlign: 'center' }}>
+                              <Button
+                                size="small"
+                                type="primary"
+                                danger
+                                icon={<DeleteOutlined />}
+                                onClick={() => handleRemovePackagingRow(idx)}
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+
+                  {/* Nút Lưu đóng gói — chỉ hiện khi edit (cần có ID) */}
+                  {isEdit && (
+                    <div style={{ marginTop: 10 }}>
+                      <Button
+                        size="small"
+                        type="primary"
+                        icon={<SaveOutlined />}
+                        loading={savingPackagings}
+                        onClick={handleSavePackagings}
+                      >
+                        💾 Lưu đóng gói
+                      </Button>
+                    </div>
+                  )}
+                </>
               );
             }}
           </Form.Item>

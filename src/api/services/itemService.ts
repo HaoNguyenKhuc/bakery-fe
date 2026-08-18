@@ -50,6 +50,15 @@ const itemService = {
   /** POST /items/{id}/reject */
   reject: (id: string, reason: string) =>
     api.post<Item>(`/api/v1/items/${id}/reject`, { reason }),
+
+  /** PUT /api/v1/items/{id}/packagings — Upsert toàn bộ danh sách quy cách đóng gói.
+   *
+   * Body: Array<{ code, name, qtyPerPack, isDefault }>
+   * BE filter ra các row có đủ code + name + qtyPerPack trước khi lưu.
+   * Gọi sau khi Item đã được tạo/cập nhật thành công.
+   */
+  updatePackagings: (id: string, data: import('../../types').ItemPackagingRequest[]) =>
+    api.put<import('../../types').ItemPackaging[]>(`/api/v1/items/${id}/packagings`, data),
 };
 
 export default itemService;
