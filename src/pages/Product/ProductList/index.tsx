@@ -42,6 +42,11 @@ const toArray = <T,>(raw: any): T[] => {
 const getTotal = (raw: any): number => raw?.totalElements ?? raw?.total ?? 0;
 const getTotalPages = (raw: any): number => raw?.totalPages ?? 1;
 
+const defPkg = (i: Item) => {
+  const pkgs = i.packagings ?? [];
+  return pkgs.find(p => p.isDefault) ?? pkgs[0] ?? null;
+};
+
 const ITEM_TYPE_LABELS: Record<ItemType, { label: string; emoji: string; color: string }> = {
   PRODUCT:      { label: 'Sản Phẩm',       emoji: '🍰', color: '#16a34a' },
   SEMI_PRODUCT: { label: 'Bán Thành Phẩm', emoji: '🧁', color: '#7c3aed' },
@@ -176,6 +181,7 @@ const ProductList: React.FC = () => {
     isError = pagedError;
   }
 
+  const isIngredient = activeItemType === 'INGREDIENT';
   const showGroupColumn = activeItemType === 'PRODUCT' && activeGroupCode === null;
   const showRecipeColumn = activeItemType === 'PRODUCT' || activeItemType === 'SEMI_PRODUCT';
 
@@ -352,146 +358,306 @@ const ProductList: React.FC = () => {
 
   // ── Table columns ──────────────────────────────────────────────────────────
 
-  const columns: ColumnsType<Item> = [
-    ...(showGroupColumn ? [{
-      title: 'Nhóm',
-      key: 'itemGroup',
-      width: 140,
-      responsive: ['md' as const],
-      render: (_: unknown, record: Item) => {
-        const groupName = record.itemGroup?.name || record.itemGroup?.value;
-        return groupName
-          ? <Text style={{ color: '#2563eb', fontWeight: 500 }}>{groupName}</Text>
-          : <Text type="secondary">—</Text>;
-      },
-    }] : []),
-    {
-      title: 'Tên',
-      dataIndex: 'name',
-      key: 'name',
-      render: (v: string, record: Item) => (
-        <Text
-          style={{ cursor: 'pointer', color: '#1d4ed8' }}
-          onClick={() => navigate(`/products/edit/${record.id}`)}
-        >
-          {v}
-        </Text>
-      ),
-    },
-    {
-      title: 'Đơn vị',
-      dataIndex: 'unit',
-      key: 'unit',
-      width: 80,
-      align: 'center',
-      responsive: ['sm' as const],
-      render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
-    },
-    ...(isSuperAdmin ? [{
-      title: 'Giá vốn',
-      key: 'unitCost',
-      width: 130,
-      align: 'right' as const,
-      responsive: ['md' as const],
-      render: (_: unknown, record: any) => {
-        const val = record.unitCost ?? record.lastPrice;
-        if (val == null) return <Text type="secondary">—</Text>;
-        return (
-          <Text style={{ fontWeight: 500, color: '#b45309' }}>
-            {Number(val).toLocaleString('vi-VN')} đ
-          </Text>
-        );
-      },
-    }] : []),
-    ...(showRecipeColumn ? [{
-      title: 'Công thức',
-      key: 'recipe',
-      width: 100,
-      align: 'center' as const,
-      render: (_: unknown, record: Item) => {
-        const recipe = record.recipe || (record as any).activeRecipe;
-        if (!recipe) {
-          return (
-            <Tooltip title="Chưa có công thức">
-              <span style={{ color: '#ef4444', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
-                ✗
-              </span>
-            </Tooltip>
-          );
-        }
-        if ((recipe as any).active === false) {
-          return (
-            <Tooltip title="Có công thức nhưng chưa kích hoạt">
-              <span style={{ color: '#d97706', fontSize: 15, fontWeight: 700, cursor: 'default' }}>
-                ⚠
-              </span>
-            </Tooltip>
-          );
-        }
-        return (
-          <Tooltip title="Công thức đang hoạt động">
-            <span style={{ color: '#16a34a', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
-              ✓
-            </span>
-          </Tooltip>
-        );
-      },
-    }] : []),
-    {
-      title: 'Trạng thái',
-      dataIndex: 'approvalStatus',
-      key: 'approvalStatus',
-      width: 110,
-      render: (v: string) => <StatusBadge status={v} />,
-    },
-    {
-      title: '',
-      key: 'action',
-      width: 200,
-      align: 'right',
-      render: (_: unknown, record: Item) => {
-        const canApprove = record.approvalStatus === 'DRAFT'
-          || record.approvalStatus === 'PENDING_APPROVAL'
-          || record.approvalStatus === 'PENDING';
-        const isProductOrSemi = activeItemType === 'PRODUCT' || activeItemType === 'SEMI_PRODUCT';
-        const isApproved = record.approvalStatus === 'APPROVED';
-
-        return (
-          <Space size={4}>
-            <Button
-              size="small"
-              icon={<EditOutlined />}
+  const columns: ColumnsType<Item> = isIngredient
+    ? [
+        {
+          title: 'Nhà cung cấp',
+          key: 'supplier',
+          width: 130,
+          render: (_: unknown, record: Item) => {
+            const sup = record.defaultSupplier;
+            const supName = (sup as any)?.name || (sup as any)?.value || (typeof sup === 'string' ? sup : null);
+            return supName ? <Text style={{ color: '#0f172a' }}>{supName}</Text> : <Text type="secondary">—</Text>;
+          },
+        },
+        {
+          title: 'Tên',
+          dataIndex: 'name',
+          key: 'name',
+          width: 180,
+          render: (v: string, record: Item) => (
+            <Text
+              ellipsis={{ tooltip: v }}
+              style={{ cursor: 'pointer', color: '#1d4ed8', maxWidth: 180 }}
               onClick={() => navigate(`/products/edit/${record.id}`)}
             >
-              Sửa
-            </Button>
-            {isProductOrSemi && isApproved && (
-              <Button
-                size="small"
-                icon={<DollarOutlined />}
-                style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
-                onClick={() => setCostModalItem(record)}
-              >
-                Tính giá cost
-              </Button>
-            )}
-            {canApprove && (
-              <Button
-                size="small"
-                type="primary"
-                icon={<CheckOutlined />}
-                style={{ background: '#16a34a', borderColor: '#16a34a' }}
-                loading={approveMut.isPending && approveMut.variables === record.id}
-                onClick={() => handleApprove(record)}
-              >
-                Approve
-              </Button>
-            )}
-          </Space>
-        );
-      },
-    },
-  ];
+              {v}
+            </Text>
+          ),
+        },
+        {
+          title: (
+            <div style={{ textAlign: 'center' }}>
+              <div>Đơn vị tính</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>KG / CAI / L…</div>
+            </div>
+          ),
+          dataIndex: 'unit',
+          key: 'unit',
+          width: 90,
+          align: 'center',
+          render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
+        },
+        {
+          title: (
+            <div style={{ textAlign: 'center' }}>
+              <div>Đơn vị nhập</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>thùng / bao…</div>
+            </div>
+          ),
+          key: 'importUnit',
+          width: 100,
+          align: 'center',
+          render: (_: unknown, record: Item) => {
+            const pkg = defPkg(record);
+            return pkg?.name ? <Text style={{ color: '#0f172a' }}>{pkg.name}</Text> : <Text type="secondary">—</Text>;
+          },
+        },
+        {
+          title: (
+            <div style={{ textAlign: 'center' }}>
+              <div>Quy đổi</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>1 đvị nhập = ? đvị tính</div>
+            </div>
+          ),
+          key: 'conversion',
+          width: 150,
+          align: 'center',
+          render: (_: unknown, record: Item) => {
+            const pkg = defPkg(record);
+            if (!pkg) return <Text type="secondary">—</Text>;
+            return (
+              <span style={{ fontSize: 12, color: '#374151' }}>
+                1 {pkg.name} = <strong>{Number(pkg.qtyPerPack).toLocaleString('vi-VN')}</strong> {record.unit}
+              </span>
+            );
+          },
+        },
+        {
+          title: (
+            <div style={{ textAlign: 'right' }}>
+              <div>Giá nhập</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvị nhập</div>
+            </div>
+          ),
+          key: 'importPrice',
+          width: 120,
+          align: 'right' as const,
+          render: (_: unknown, record: Item) => {
+            const pkg = defPkg(record);
+            const cost = record.unitCost ?? record.lastPrice;
+            if (!pkg || cost == null) return <Text type="secondary">—</Text>;
+            const giaNhap = Number(cost) * Number(pkg.qtyPerPack);
+            return (
+              <Text style={{ fontWeight: 500, color: '#0f172a' }}>
+                {Number(giaNhap).toLocaleString('vi-VN')} đ
+              </Text>
+            );
+          },
+        },
+        {
+          title: (
+            <div style={{ textAlign: 'right' }}>
+              <div>Giá lẻ</div>
+              <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvị tính</div>
+            </div>
+          ),
+          key: 'retailPrice',
+          width: 120,
+          align: 'right' as const,
+          render: (_: unknown, record: Item) => {
+            const cost = record.unitCost ?? record.lastPrice;
+            if (cost == null) return <Text type="secondary">—</Text>;
+            return (
+              <Text style={{ fontWeight: 500, color: '#0f172a' }}>
+                {Number(cost).toLocaleString('vi-VN')} đ
+              </Text>
+            );
+          },
+        },
+        {
+          title: 'Trạng thái',
+          dataIndex: 'approvalStatus',
+          key: 'approvalStatus',
+          width: 110,
+          render: (v: string) => <StatusBadge status={v} />,
+        },
+        {
+          title: '',
+          key: 'action',
+          width: 140,
+          align: 'right',
+          render: (_: unknown, record: Item) => {
+            const canApprove = record.approvalStatus === 'DRAFT'
+              || record.approvalStatus === 'PENDING_APPROVAL'
+              || record.approvalStatus === 'PENDING';
+
+            return (
+              <Space size={4}>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/products/edit/${record.id}`)}
+                >
+                  Sửa
+                </Button>
+                {canApprove && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                    loading={approveMut.isPending && approveMut.variables === record.id}
+                    onClick={() => handleApprove(record)}
+                  >
+                    Approve
+                  </Button>
+                )}
+              </Space>
+            );
+          },
+        },
+      ]
+    : [
+        ...(showGroupColumn ? [{
+          title: 'Nhóm',
+          key: 'itemGroup',
+          width: 140,
+          responsive: ['md' as const],
+          render: (_: unknown, record: Item) => {
+            const groupName = record.itemGroup?.name || record.itemGroup?.value;
+            return groupName
+              ? <Text style={{ color: '#2563eb', fontWeight: 500 }}>{groupName}</Text>
+              : <Text type="secondary">—</Text>;
+          },
+        }] : []),
+        {
+          title: 'Tên',
+          dataIndex: 'name',
+          key: 'name',
+          render: (v: string, record: Item) => (
+            <Text
+              style={{ cursor: 'pointer', color: '#1d4ed8' }}
+              onClick={() => navigate(`/products/edit/${record.id}`)}
+            >
+              {v}
+            </Text>
+          ),
+        },
+        {
+          title: 'Đơn vị',
+          dataIndex: 'unit',
+          key: 'unit',
+          width: 80,
+          align: 'center',
+          responsive: ['sm' as const],
+          render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
+        },
+        ...(isSuperAdmin ? [{
+          title: 'Giá vốn',
+          key: 'unitCost',
+          width: 130,
+          align: 'right' as const,
+          responsive: ['md' as const],
+          render: (_: unknown, record: any) => {
+            const val = record.unitCost ?? record.lastPrice;
+            if (val == null) return <Text type="secondary">—</Text>;
+            return (
+              <Text style={{ fontWeight: 500, color: '#b45309' }}>
+                {Number(val).toLocaleString('vi-VN')} đ
+              </Text>
+            );
+          },
+        }] : []),
+        ...(showRecipeColumn ? [{
+          title: 'Công thức',
+          key: 'recipe',
+          width: 100,
+          align: 'center' as const,
+          render: (_: unknown, record: Item) => {
+            const recipe = record.recipe || (record as any).activeRecipe;
+            if (!recipe) {
+              return (
+                <Tooltip title="Chưa có công thức">
+                  <span style={{ color: '#ef4444', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+                    ✗
+                  </span>
+                </Tooltip>
+              );
+            }
+            if ((recipe as any).active === false) {
+              return (
+                <Tooltip title="Có công thức nhưng chưa kích hoạt">
+                  <span style={{ color: '#d97706', fontSize: 15, fontWeight: 700, cursor: 'default' }}>
+                    ⚠
+                  </span>
+                </Tooltip>
+              );
+            }
+            return (
+              <Tooltip title="Công thức đang hoạt động">
+                <span style={{ color: '#16a34a', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+                  ✓
+                </span>
+              </Tooltip>
+            );
+          },
+        }] : []),
+        {
+          title: 'Trạng thái',
+          dataIndex: 'approvalStatus',
+          key: 'approvalStatus',
+          width: 110,
+          render: (v: string) => <StatusBadge status={v} />,
+        },
+        {
+          title: '',
+          key: 'action',
+          width: 200,
+          align: 'right',
+          render: (_: unknown, record: Item) => {
+            const canApprove = record.approvalStatus === 'DRAFT'
+              || record.approvalStatus === 'PENDING_APPROVAL'
+              || record.approvalStatus === 'PENDING';
+            const isProductOrSemi = activeItemType === 'PRODUCT' || activeItemType === 'SEMI_PRODUCT';
+            const isApproved = record.approvalStatus === 'APPROVED';
+
+            return (
+              <Space size={4}>
+                <Button
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => navigate(`/products/edit/${record.id}`)}
+                >
+                  Sửa
+                </Button>
+                {isProductOrSemi && isApproved && (
+                  <Button
+                    size="small"
+                    icon={<DollarOutlined />}
+                    style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
+                    onClick={() => setCostModalItem(record)}
+                  >
+                    Tính giá cost
+                  </Button>
+                )}
+                {canApprove && (
+                  <Button
+                    size="small"
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                    loading={approveMut.isPending && approveMut.variables === record.id}
+                    onClick={() => handleApprove(record)}
+                  >
+                    Approve
+                  </Button>
+                )}
+              </Space>
+            );
+          },
+        },
+      ];
 
   // ── Pagination info ────────────────────────────────────────────────────────
 
@@ -686,7 +852,7 @@ const ProductList: React.FC = () => {
             size="small"
             pagination={false}
             bordered={false}
-            scroll={{ x: 750 }}
+            scroll={{ x: isIngredient ? 1020 : 750 }}
             style={{ fontSize: 13 }}
             onRow={(record) => ({
               style: { cursor: 'default' },
