@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
 import {
   Table, Button, Input, Tag, Space, Typography, Modal, Alert,
-  message,
+  message, Tooltip,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, EditOutlined,
-  CheckOutlined, SyncOutlined,
+  CheckOutlined, SyncOutlined, DollarOutlined,
+  DeleteOutlined, FileExcelOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
+import * as XLSX from 'xlsx';
 import { itemService, itemGroupService } from '../../../api/services';
 import type { Item, ItemType, ItemGroup } from '../../../types';
 import { useAuthStore } from '../../../store/authStore';
+import { CostCalculationModal } from './CostCalculationModal';
 
 const { Title, Text } = Typography;
 
@@ -90,6 +93,11 @@ const ProductList: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
+  const [costModalItem, setCostModalItem] = useState<Item | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [selectedRows, setSelectedRows] = useState<Item[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const debouncedSearch = useDebounce(search, 500);
 
@@ -115,7 +123,7 @@ const ProductList: React.FC = () => {
     queryKey: ['items-paged', activeItemType, debouncedSearch, page, statusFilter],
     queryFn: () => itemService.getAllItems({
       itemType: activeItemType,
-      search: debouncedSearch,
+      q: debouncedSearch.trim() || undefined,
       approvalStatus: statusFilter ?? undefined,
       page,
       size: PAGE_SIZE,
@@ -169,6 +177,7 @@ const ProductList: React.FC = () => {
   }
 
   const showGroupColumn = activeItemType === 'PRODUCT' && activeGroupCode === null;
+  const showRecipeColumn = activeItemType === 'PRODUCT' || activeItemType === 'SEMI_PRODUCT';
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -192,6 +201,126 @@ const ProductList: React.FC = () => {
     });
   };
 
+  const handleBulkDelete = () => {
+    if (selectedRows.length === 0) return;
+    const codeList = selectedRows.map(r => r.code).filter(Boolean);
+    const codeSummary = codeList.length <= 5
+      ? codeList.join(', ')
+      : `${codeList.slice(0, 5).join(', ')}... (+${codeList.length - 5} mã khác)`;
+
+    Modal.confirm({
+      title: 'Xác nhận xóa hàng loạt',
+      content: `Bạn có chắc chắn muốn xóa ${selectedRows.length} sản phẩm đã chọn? (Mã: ${codeSummary})`,
+      okText: 'Xóa',
+      okType: 'danger',
+      cancelText: 'Hủy',
+      onOk: async () => {
+        setIsBulkDeleting(true);
+        try {
+          const results = await Promise.allSettled(
+            selectedRows.map(item => itemService.submitDelete(item.id))
+          );
+          const successCount = results.filter(r => r.status === 'fulfilled').length;
+          const failCount = results.length - successCount;
+          if (successCount > 0) {
+            message.success(`Đã xóa thành công ${successCount} sản phẩm!`);
+          }
+          if (failCount > 0) {
+            message.error(`${failCount} sản phẩm không thể xóa do có dữ liệu liên kết.`);
+          }
+          setSelectedRowKeys([]);
+          setSelectedRows([]);
+          queryClient.invalidateQueries({ queryKey: ['items-paged'] });
+          queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
+        } catch (err: any) {
+          message.error('Lỗi khi thực hiện xóa.');
+        } finally {
+          setIsBulkDeleting(false);
+        }
+      },
+    });
+  };
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      // Tải toàn bộ dữ liệu của tab hiện tại
+      const rawData = await itemService.getAllItemsByType(activeItemType);
+      const items: Item[] = toArray<Item>(rawData);
+
+      if (!items || items.length === 0) {
+        message.warning('Không có dữ liệu trong tab này để xuất!');
+        return;
+      }
+
+      // Format dữ liệu theo từng tab
+      const exportRows = items.map((item, index) => {
+        const groupName = item.itemGroup?.name || item.itemGroup?.value || '';
+        const recipeInfo = item.recipe || (item as any).activeRecipe;
+        const recipeText = recipeInfo
+          ? (recipeInfo.active ? 'Có (Hoạt động)' : 'Có (Chưa kích hoạt)')
+          : 'Chưa có';
+        const cost = item.unitCost ?? (item as any).lastPrice ?? '';
+
+        if (activeItemType === 'PRODUCT') {
+          return {
+            'STT': index + 1,
+            'Nhóm': groupName,
+            'Mã': item.code,
+            'Tên sản phẩm': item.name,
+            'Đơn vị': item.unit,
+            'Giá vốn (VNĐ)': cost ? Number(cost) : '',
+            'Giá bán (VNĐ)': item.sellingPrice ? Number(item.sellingPrice) : '',
+            'Công thức': recipeText,
+            'Trạng thái': item.approvalStatus,
+          };
+        } else if (activeItemType === 'SEMI_PRODUCT') {
+          return {
+            'STT': index + 1,
+            'Mã': item.code,
+            'Tên bán thành phẩm': item.name,
+            'Đơn vị': item.unit,
+            'Giá vốn (VNĐ)': cost ? Number(cost) : '',
+            'Công thức': recipeText,
+            'Trạng thái': item.approvalStatus,
+          };
+        } else {
+          const supplierName = (item.defaultSupplier as any)?.name
+            || (item.defaultSupplier as any)?.value
+            || item.defaultSupplier
+            || '';
+          return {
+            'STT': index + 1,
+            'Mã': item.code,
+            'Tên nguyên liệu': item.name,
+            'Nhà cung cấp': supplierName,
+            'Đơn vị': item.unit,
+            'Giá vốn / Giá nhập (VNĐ)': cost ? Number(cost) : '',
+            'Trạng thái': item.approvalStatus,
+          };
+        }
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(exportRows);
+      const workbook = XLSX.utils.book_new();
+
+      const tabLabel = ITEM_TYPE_LABELS[activeItemType]?.label || activeItemType;
+      const cleanFileName = activeItemType === 'PRODUCT'
+        ? 'San_Pham'
+        : activeItemType === 'SEMI_PRODUCT'
+        ? 'Ban_Thanh_Pham'
+        : 'Nguyen_Lieu';
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, tabLabel);
+      XLSX.writeFile(workbook, `${cleanFileName}.xlsx`);
+      message.success(`Đã xuất file ${cleanFileName}.xlsx thành công!`);
+    } catch (err: any) {
+      message.error('Xuất file thất bại: ' + (err?.message || 'Lỗi không xác định'));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   // ── Switching ──────────────────────────────────────────────────────────────
 
   const switchItemType = (type: ItemType) => {
@@ -200,14 +329,20 @@ const ProductList: React.FC = () => {
     setStatusFilter(null);
     setPage(0);
     setSearch('');
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
   };
 
   const switchGroup = (code: string | null) => {
     setActiveGroupCode(code);
     setPage(0);
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
   };
 
   const handleRefresh = () => {
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
     if (isGroupFiltered) {
       refetchAllType();
     } else {
@@ -230,13 +365,6 @@ const ProductList: React.FC = () => {
           : <Text type="secondary">—</Text>;
       },
     }] : []),
-    {
-      title: 'Mã',
-      dataIndex: 'code',
-      key: 'code',
-      width: 150,
-      render: (v: string) => <Text code style={{ fontSize: 12 }}>{v}</Text>,
-    },
     {
       title: 'Tên',
       dataIndex: 'name',
@@ -275,6 +403,40 @@ const ProductList: React.FC = () => {
         );
       },
     }] : []),
+    ...(showRecipeColumn ? [{
+      title: 'Công thức',
+      key: 'recipe',
+      width: 100,
+      align: 'center' as const,
+      render: (_: unknown, record: Item) => {
+        const recipe = record.recipe || (record as any).activeRecipe;
+        if (!recipe) {
+          return (
+            <Tooltip title="Chưa có công thức">
+              <span style={{ color: '#ef4444', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+                ✗
+              </span>
+            </Tooltip>
+          );
+        }
+        if ((recipe as any).active === false) {
+          return (
+            <Tooltip title="Có công thức nhưng chưa kích hoạt">
+              <span style={{ color: '#d97706', fontSize: 15, fontWeight: 700, cursor: 'default' }}>
+                ⚠
+              </span>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tooltip title="Công thức đang hoạt động">
+            <span style={{ color: '#16a34a', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+              ✓
+            </span>
+          </Tooltip>
+        );
+      },
+    }] : []),
     {
       title: 'Trạng thái',
       dataIndex: 'approvalStatus',
@@ -285,12 +447,15 @@ const ProductList: React.FC = () => {
     {
       title: '',
       key: 'action',
-      width: 140,
+      width: 200,
       align: 'right',
       render: (_: unknown, record: Item) => {
         const canApprove = record.approvalStatus === 'DRAFT'
           || record.approvalStatus === 'PENDING_APPROVAL'
           || record.approvalStatus === 'PENDING';
+        const isProductOrSemi = activeItemType === 'PRODUCT' || activeItemType === 'SEMI_PRODUCT';
+        const isApproved = record.approvalStatus === 'APPROVED';
+
         return (
           <Space size={4}>
             <Button
@@ -300,6 +465,16 @@ const ProductList: React.FC = () => {
             >
               Sửa
             </Button>
+            {isProductOrSemi && isApproved && (
+              <Button
+                size="small"
+                icon={<DollarOutlined />}
+                style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
+                onClick={() => setCostModalItem(record)}
+              >
+                Tính giá cost
+              </Button>
+            )}
             {canApprove && (
               <Button
                 size="small"
@@ -404,53 +579,83 @@ const ProductList: React.FC = () => {
         )}
 
         {/* ── Toolbar ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 20px 12px', flexWrap: 'wrap' }}>
-          <Input
-            placeholder="Tìm tên / code..."
-            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            allowClear
-            style={{ width: '100%', maxWidth: 240 }}
-          />
-          {/* Status filter pills */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {STATUS_FILTERS.map(({ key, label, color, bg }) => {
-              const active = statusFilter === key;
-              return (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '14px 20px 12px', flexWrap: 'wrap' }}>
+          {/* Left: Search & status filter */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1 }}>
+            <Input
+              placeholder="Tìm tên / code..."
+              prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
+              value={search}
+              onChange={e => {
+                setSearch(e.target.value);
+                setPage(0);
+                setSelectedRowKeys([]);
+                setSelectedRows([]);
+              }}
+              allowClear
+              style={{ width: '100%', maxWidth: 240 }}
+            />
+            {/* Status filter pills */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {STATUS_FILTERS.map(({ key, label, color, bg }) => {
+                const active = statusFilter === key;
+                return (
+                  <span
+                    key={key}
+                    onClick={() => { setStatusFilter(active ? null : key); setPage(0); }}
+                    style={{
+                      padding: '3px 12px',
+                      borderRadius: 12,
+                      fontSize: 12,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      color: active ? '#fff' : color,
+                      background: active ? color : bg,
+                      border: `1px solid ${color}`,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
+              {statusFilter && (
                 <span
-                  key={key}
-                  onClick={() => { setStatusFilter(active ? null : key); setPage(0); }}
+                  onClick={() => { setStatusFilter(null); setPage(0); }}
                   style={{
-                    padding: '3px 12px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    color: active ? '#fff' : color,
-                    background: active ? color : bg,
-                    border: `1px solid ${color}`,
-                    transition: 'all 0.15s',
+                    padding: '3px 10px', borderRadius: 12, fontSize: 12,
+                    cursor: 'pointer', color: '#64748b', background: '#f1f5f9',
+                    border: '1px solid #cbd5e1', fontWeight: 500,
                   }}
                 >
-                  {label}
+                  ✕ Xóa lọc
                 </span>
-              );
-            })}
-            {statusFilter && (
-              <span
-                onClick={() => { setStatusFilter(null); setPage(0); }}
-                style={{
-                  padding: '3px 10px', borderRadius: 12, fontSize: 12,
-                  cursor: 'pointer', color: '#64748b', background: '#f1f5f9',
-                  border: '1px solid #cbd5e1', fontWeight: 500,
-                }}
-              >
-                ✕ Xóa lọc
-              </span>
-            )}
+              )}
+            </div>
           </div>
+
+          {/* Right: Export & Delete buttons */}
+          <Space>
+            <Button
+              icon={<FileExcelOutlined />}
+              style={{ color: '#16a34a', borderColor: '#16a34a' }}
+              loading={isExporting}
+              onClick={handleExport}
+            >
+              Xuất Excel
+            </Button>
+            <Button
+              danger
+              type="primary"
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+              loading={isBulkDeleting}
+              onClick={handleBulkDelete}
+            >
+              Xóa {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
+            </Button>
+          </Space>
         </div>
 
         {/* ── Error ── */}
@@ -467,6 +672,13 @@ const ProductList: React.FC = () => {
         {/* ── Table ── */}
         <div style={{ padding: '0 20px', overflowX: 'auto' }}>
           <Table<Item>
+            rowSelection={{
+              selectedRowKeys,
+              onChange: (keys: React.Key[], rows: Item[]) => {
+                setSelectedRowKeys(keys);
+                setSelectedRows(rows);
+              },
+            }}
             columns={columns}
             dataSource={displayItems}
             rowKey="id"
@@ -518,6 +730,14 @@ const ProductList: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Cost Calculation Modal */}
+      <CostCalculationModal
+        open={!!costModalItem}
+        itemId={costModalItem?.id ?? null}
+        itemName={costModalItem?.name ?? ''}
+        onClose={() => setCostModalItem(null)}
+      />
     </div>
   );
 };

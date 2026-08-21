@@ -414,6 +414,34 @@ export interface RecipeUpdateRequest {
   lines?: RecipeLineRequest[];
 }
 
+export type RecipePriceSource =
+  | 'CATALOG'
+  | 'STOCK_LOT_AVG'
+  | 'RECIPE_CALCULATED'
+  | 'MISSING'
+  | 'UNIT_MISMATCH'
+  | string;
+
+export interface RecipeCostBreakdownLine {
+  itemId?: string;
+  itemCode?: string;
+  itemName: string;
+  quantity: number;
+  unit: string;
+  unitPrice?: number | null;
+  lineCost?: number | null;
+  priceSource?: RecipePriceSource;
+  subBreakdown?: RecipeCostBreakdownLine[];
+}
+
+export interface RecipeCostCalculation {
+  itemId?: string;
+  itemName?: string;
+  complete: boolean;
+  totalCostPerUnit: number;
+  breakdown?: RecipeCostBreakdownLine[];
+}
+
 // ─────────────────────────────────────────────
 // PRODUCT PRICE
 // ─────────────────────────────────────────────

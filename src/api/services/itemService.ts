@@ -9,9 +9,15 @@ import type {
 const itemService = {
   // ── Queries ──────────────────────────────────────
 
-  /** GET /items — All items with search/pagination/status/type */
-  getAllItems: (params?: { search?: string; approvalStatus?: string; itemType?: string; page?: number; size?: number }) =>
-    api.get<any>('/api/v1/items', params),
+  /** GET /items — All items with search (q), pagination, status, type */
+  getAllItems: (params?: { q?: string; search?: string; approvalStatus?: string; itemType?: string; page?: number; size?: number }) => {
+    const { search, ...rest } = params || {};
+    const query = rest.q ?? search;
+    return api.get<any>('/api/v1/items', {
+      ...rest,
+      ...(query ? { q: query.trim() } : {}),
+    });
+  },
 
   /** GET /items — Load all items of a type (large page) for client-side group filtering */
   getAllItemsByType: (itemType: string) =>

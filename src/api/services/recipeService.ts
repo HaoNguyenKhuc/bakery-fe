@@ -1,5 +1,10 @@
 import api from '../axiosClient';
-import type { Recipe, RecipeRequest, RecipeUpdateRequest } from '../../types';
+import type {
+  Recipe,
+  RecipeRequest,
+  RecipeUpdateRequest,
+  RecipeCostCalculation,
+} from '../../types';
 
 const recipeService = {
   // ── Queries ──────────────────────────────────────
@@ -13,6 +18,10 @@ const recipeService = {
   getAll: () => api.get<any>('/api/v1/recipes'),
 
   getById: (id: string) => api.get<Recipe>(`/api/v1/recipes/${id}`),
+
+  /** GET /api/v1/recipes/cost/{itemId} — Calculate recipe cost breakdown */
+  calculateCost: (itemId: string) =>
+    api.get<RecipeCostCalculation>(`/api/v1/recipes/cost/${itemId}`),
 
   // ── Commands ─────────────────────────────────────
 
@@ -30,6 +39,10 @@ const recipeService = {
   activate: (id: string) => api.post(`/api/v1/recipes/${id}/activate`),
 
   clone: (id: string) => api.post<Recipe>(`/api/v1/recipes/${id}/clone`),
+
+  /** POST /api/v1/recipes/cost/{itemId}/apply — Apply calculated unit cost to item */
+  applyCost: (itemId: string) =>
+    api.post<{ totalCostPerUnit: number }>(`/api/v1/recipes/cost/${itemId}/apply`),
 };
 
 export default recipeService;
