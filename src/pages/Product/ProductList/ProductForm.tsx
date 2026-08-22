@@ -36,12 +36,15 @@ const ProductForm: React.FC = () => {
   const [packagings, setPackagings] = useState<PackagingRow[]>([]);
   const [savingPackagings, setSavingPackagings] = useState(false);
 
-  // ── Price Display State (INGREDIENT only) ─────────────────────────────────────
-  /** Giá nhập hiển thị trên UI — chỉ để tính 2 chiều, không lưu DB.
-   *  DB lưu: unitCost = Giá lẻ (đ/đvị tính).
-   *  Giá nhập = unitCost × qtyPerPack của đóng gói mặc định.
+  // ── Price Input State (INGREDIENT only) ──────────────────────────────────────
+  /** Giá nhập — do user nhập tay (đ/đvị nhập). Không lưu DB trực tiếp.
+   *  Logic chuẩn (theo dev-ui.html):
+   *    User nhập  → Giá Nhập (editable)
+   *    Tính ra    → Giá Lẻ = Giá Nhập ÷ qtyPerPack  (readonly, hiển thị)
+   *    DB lưu     → unitCost = Giá Lẻ
+   *  Khi chưa có đóng gói: qty fallback = 1 → Giá Lẻ = Giá Nhập
    */
-  const [importPriceDisplay, setImportPriceDisplay] = useState<number | null>(null);
+  const [giaNhapInput, setGiaNhapInput] = useState<number | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -144,16 +147,10 @@ const ProductForm: React.FC = () => {
         itemType: editProduct.itemType || 'PRODUCT',
         productCategory: editProduct.productCategory || undefined,
         unit: editProduct.unit,
-        defaultSupplier: editProduct.defaultSupplier || undefined,
         itemGroupId: editProduct.itemGroupId || undefined,
         splittable: editProduct.splittable ?? false,
         unitSize: editProduct.unitSize ?? undefined,
-        baseUnit: editProduct.baseUnit || undefined,
-        // ingredientType: editProduct.ingredientType || undefined,
         defaultSupplierId: defaultSupplierId || undefined,
-        // itemGroupId: itemGroupId || undefined,
-        // splittable: editProduct.splittable ?? false,
-        // unitSize: editProduct.unitSize ?? undefined,
         unitCost: editProduct.unitCost ?? editProduct.lastPrice ?? undefined,
         shelfDays: editProduct.shelfDays ?? undefined,
         recipe: recipe as any,
@@ -181,40 +178,36 @@ const ProductForm: React.FC = () => {
     }
   }, [isEdit, itemData]); // chỉ chạy khi itemData thay đổi thực sự
 
-  // ── Import Price Sync — populate Giá nhập khi chỉnh sửa ────────────────────────
-  // Chạy sau packaging sync để đảm bảo packagings đã được set trước khi tính
+  // ── Giá Nhập Sync — populate khi chỉnh sửa ─────────────────────────────────
+  // unitCost (DB) = Giá Lẻ → để hiện lại Giá Nhập: giaNhap = unitCost × qty
   useEffect(() => {
     if (isEdit && itemData) {
       const editProduct: any = itemData;
       const unitCost = editProduct.unitCost ?? editProduct.lastPrice;
       const rawPackagings: ItemPackaging[] = (editProduct as any).packagings ?? [];
       const defaultPkg = rawPackagings.find(p => p.isDefault) ?? rawPackagings[0] ?? null;
-      if (unitCost != null && defaultPkg && defaultPkg.qtyPerPack > 0) {
-        setImportPriceDisplay(Number(unitCost) * Number(defaultPkg.qtyPerPack));
+      const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
+      if (unitCost != null) {
+        // Tính ngược: giaNhap = giaLe × qty
+        setGiaNhapInput(Math.round(Number(unitCost) * qty));
       } else {
-        setImportPriceDisplay(null);
+        setGiaNhapInput(null);
       }
     } else if (!isEdit) {
-      setImportPriceDisplay(null);
+      setGiaNhapInput(null);
     }
   }, [isEdit, itemData]);
 
-  // ── Recalculate Giá nhập khi packagings thay đổi ────────────────────────────
-  // Trigger: user thêm đóng gói SAU khi đã nhập Giá lẻ → tự tính lại Giá nhập
-  // Không chạy khi itemData load (đã được xử lý bởi effect trên)
+  // ── Recalculate khi packagings thay đổi ──────────────────────────────────────
+  // Trigger: user thêm/sửa/xóa đóng gói SAU khi đã nhập Giá nhập
+  // → tính lại Giá Lẻ (unitCost) = giaNhap ÷ qty mới
   useEffect(() => {
+    if (giaNhapInput == null) return; // chưa có giá nhập, không cần tính
     const defaultPkg = packagings.find(p => p.isDefault) ?? packagings[0] ?? null;
-    if (!defaultPkg || defaultPkg.qtyPerPack <= 0) {
-      // Đóng gói bị xóa hết hoặc qtyPerPack chưa hợp lệ → reset Giá nhập
-      setImportPriceDisplay(null);
-      return;
-    }
-    const currentUnitCost = form.getFieldValue('unitCost');
-    if (currentUnitCost != null && Number(currentUnitCost) > 0) {
-      // Đủ cả Giá lẻ lẫn đóng gói → tính lại Giá nhập
-      setImportPriceDisplay(Number(currentUnitCost) * Number(defaultPkg.qtyPerPack));
-    }
-  }, [packagings, form]);
+    const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
+    const newGiaLe = Math.round(giaNhapInput / qty);
+    form.setFieldValue('unitCost', newGiaLe > 0 ? newGiaLe : null);
+  }, [packagings, form, giaNhapInput]);
 
 
   // ── Mutation ─────────────────────────────────────────────────────────────────
@@ -460,7 +453,7 @@ const ProductForm: React.FC = () => {
               </Form.Item>
             </Col>
 
-            <Col xs={24} md={4}>
+            <Col xs={24} md={6}>
               {/* Empty label spacer to align checkbox with inputs */}
               <Form.Item
                 name="splittable"
@@ -478,7 +471,7 @@ const ProductForm: React.FC = () => {
             >
               {({ getFieldValue }) =>
                 getFieldValue('splittable') ? (
-                  <Col xs={24} md={12}>
+                  <Col xs={24} md={10}>
                     <Form.Item
                       name="unitSize"
                       label="Kích cỡ"
@@ -495,16 +488,6 @@ const ProductForm: React.FC = () => {
                 ) : null
               }
             </Form.Item>
-
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="baseUnit"
-                label="Đơn vị cơ sở"
-                tooltip="Điền khi unit là đơn vị đóng gói. Vd: unit=HOP, unitSize=5, baseUnit=KG → hệ thống hiểu 1 HOP = 5 KG khi tính giá công thức."
-              >
-                <Input placeholder="VD: KG, G, L, ML..." style={{ textTransform: 'uppercase' }} />
-              </Form.Item>
-            </Col>
           </Row>
 
           {/* Conditional fields for INGREDIENT */}
@@ -515,13 +498,6 @@ const ProductForm: React.FC = () => {
                 <>
                   <Divider />
                   <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="defaultSupplier" label="Nhà Cung Cấp Mặc Định">
-                        <Input placeholder="VD: Công ty ABC" />
-                        {/* <Form.Item name="ingredientType" label="Loại Nguyên Liệu">
-                        <Input placeholder="VD: Bột, Đường, Trứng..." /> */}
-                      </Form.Item>
-                    </Col>
                     <Col xs={24} md={12}>
                       <Form.Item name="defaultSupplierId" label="Nhà Cung Cấp">
                         <Select
@@ -573,37 +549,37 @@ const ProductForm: React.FC = () => {
               const t = getFieldValue('itemType');
               if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
 
-              // ── INGREDIENT: 2 input song song với tính 2 chiều ──────────────
+              // ── INGREDIENT: Giá Nhập (editable) → tính Giá Lẻ (readonly) ──────
               if (t === 'INGREDIENT') {
-                // Đóng gói mặc định — lấy từ state packagings (đã sync từ itemData hoặc do user thêm)
+                // Đóng gói mặc định — lấy từ state packagings
                 const defaultPkg = packagings.find(p => p.isDefault) ?? packagings[0] ?? null;
+                const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
                 const hasPackaging = defaultPkg != null && defaultPkg.qtyPerPack > 0;
+
+                // Label đơn vị nhập (tên đóng gói mặc định hoặc fallback)
+                const importUnitLabel = hasPackaging
+                  ? (defaultPkg!.name || 'đvị nhập')
+                  : getFieldValue('unit') || 'đvị tính';
+
+                // Dòng quy đổi hiển thị bên dưới
                 const conversionLabel = hasPackaging
-                  ? `1 ${defaultPkg!.name || 'đvị nhập'} = ${Number(defaultPkg!.qtyPerPack).toLocaleString('vi-VN')} ${getFieldValue('unit') || 'đvị tính'}`
+                  ? `1 ${defaultPkg!.name} = ${qty.toLocaleString('vi-VN')} ${getFieldValue('unit') || 'đvị tính'}`
                   : null;
 
                 const numFmt = (v: number | string | undefined) =>
                   v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
                 const numParse = (v: string | undefined) => v?.replace(/,/g, '') as any;
 
-                // Khi user thay đổi Giá lẻ → tính ra Giá nhập
-                const onChangeGiaLe = (val: number | null) => {
-                  if (val != null && hasPackaging) {
-                    setImportPriceDisplay(val * defaultPkg!.qtyPerPack);
-                  } else {
-                    setImportPriceDisplay(null);
-                  }
-                };
+                // Giá lẻ hiện tại tính từ giaNhapInput ÷ qty (để hiển thị readonly)
+                const giaLeDisplay = (giaNhapInput != null && giaNhapInput > 0)
+                  ? Math.round(giaNhapInput / qty)
+                  : null;
 
-                // Khi user thay đổi Giá nhập → tính ra Giá lẻ và set vào form
+                // Khi user thay đổi Giá nhập → tính Giá lẻ → set unitCost
                 const onChangeGiaNhap = (val: number | null) => {
-                  setImportPriceDisplay(val);
-                  if (val != null && hasPackaging && defaultPkg!.qtyPerPack > 0) {
-                    const retail = val / defaultPkg!.qtyPerPack;
-                    form.setFieldValue('unitCost', retail);
-                  } else if (val == null) {
-                    form.setFieldValue('unitCost', null);
-                  }
+                  setGiaNhapInput(val);
+                  const giaLe = (val != null && val > 0) ? Math.round(val / qty) : null;
+                  form.setFieldValue('unitCost', giaLe);
                 };
 
                 return (
@@ -614,7 +590,37 @@ const ProductForm: React.FC = () => {
                       </div>
                     )}
                     <Row gutter={24}>
-                      {/* Giá lẻ — trường thực sự lưu DB (unitCost) */}
+                      {/* Giá nhập — user nhập tay */}
+                      <Col xs={24} md={12}>
+                        <Form.Item
+                          label={
+                            <span>
+                              Giá nhập&nbsp;
+                              <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
+                                (đ / {importUnitLabel})
+                              </span>
+                            </span>
+                          }
+                          tooltip={
+                            hasPackaging
+                              ? `Giá nhập trên mỗi ${importUnitLabel}. Hệ thống tự tính Giá lẻ = Giá nhập ÷ ${qty.toLocaleString('vi-VN')}.`
+                              : 'Chưa có đóng gói — nhập Giá nhập, hệ thống coi qty=1, Giá lẻ = Giá nhập.'
+                          }
+                        >
+                          <InputNumber
+                            min={0}
+                            step={1000}
+                            style={{ width: '100%' }}
+                            placeholder="Ví dụ: 480,000"
+                            value={giaNhapInput}
+                            formatter={numFmt}
+                            parser={numParse}
+                            onChange={onChangeGiaNhap}
+                          />
+                        </Form.Item>
+                      </Col>
+
+                      {/* Giá lẻ — readonly, tính từ Giá nhập ÷ qty, lưu vào unitCost */}
                       <Col xs={24} md={12}>
                         <Form.Item
                           name="unitCost"
@@ -623,50 +629,21 @@ const ProductForm: React.FC = () => {
                               Giá lẻ&nbsp;
                               <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
                                 (đ / {getFieldValue('unit') || 'đvị tính'})
+                                {hasPackaging && ` = Giá nhập ÷ ${qty.toLocaleString('vi-VN')}`}
                               </span>
                             </span>
                           }
-                          tooltip="Giá trên mỗi đơn vị tính (KG, L, CAI…). Đây là giá vốn lưu vào hệ thống."
+                          tooltip="Giá trên mỗi đơn vị tính (KG, L, CAI…). Được tính tự động từ Giá nhập ÷ Qty/pack. Đây là giá vốn lưu vào DB."
                         >
                           <InputNumber
                             min={0}
-                            step={1000}
-                            style={{ width: '100%' }}
-                            placeholder="0"
+                            style={{ width: '100%', background: '#f8fafc', color: '#0f172a', fontWeight: 600 }}
+                            placeholder="—"
+                            readOnly
+                            value={giaLeDisplay ?? undefined}
                             formatter={numFmt}
                             parser={numParse}
-                            onChange={onChangeGiaLe}
-                          />
-                        </Form.Item>
-                      </Col>
-
-                      {/* Giá nhập — UI only, tính từ unitCost × qtyPerPack */}
-                      <Col xs={24} md={12}>
-                        <Form.Item
-                          label={
-                            <span>
-                              Giá nhập&nbsp;
-                              <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
-                                (đ / {defaultPkg?.name || 'đvị nhập'})
-                              </span>
-                            </span>
-                          }
-                          tooltip={
-                            hasPackaging
-                              ? `Giá nhập = Giá lẻ × ${Number(defaultPkg!.qtyPerPack).toLocaleString('vi-VN')} (${conversionLabel}). Nhập một trong hai để tự tính cái còn lại.`
-                              : 'Chưa có đóng gói — thêm Đóng Gói ở phía dưới để kích hoạt tính năng này.'
-                          }
-                        >
-                          <InputNumber
-                            min={0}
-                            step={1000}
-                            style={{ width: '100%' }}
-                            placeholder={hasPackaging ? '0' : '— Chưa có đóng gói —'}
-                            disabled={!hasPackaging}
-                            value={importPriceDisplay}
-                            formatter={numFmt}
-                            parser={numParse}
-                            onChange={onChangeGiaNhap}
+                            tabIndex={-1}
                           />
                         </Form.Item>
                       </Col>
@@ -674,6 +651,7 @@ const ProductForm: React.FC = () => {
                   </>
                 );
               }
+
 
               // ── SEMI_PRODUCT: giữ nguyên 1 input Giá vốn ───────────────────
               return (

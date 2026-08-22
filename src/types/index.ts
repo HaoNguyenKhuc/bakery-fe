@@ -366,6 +366,11 @@ export interface ProductHistory extends BaseEntity {
   payload: Partial<ProductRequest>;
 }
 
+export interface BulkDeleteResponse {
+  ids: string[];
+  deleted: number;
+}
+
 // ─────────────────────────────────────────────
 // RECIPE
 // ─────────────────────────────────────────────
@@ -440,6 +445,13 @@ export interface RecipeCostCalculation {
   complete: boolean;
   totalCostPerUnit: number;
   breakdown?: RecipeCostBreakdownLine[];
+}
+
+export interface RecipeApplyAllResponse {
+  updated: number;
+  skipped: number;
+  noRecipe: number;
+  errors?: string[];
 }
 
 // ─────────────────────────────────────────────

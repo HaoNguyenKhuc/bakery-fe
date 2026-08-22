@@ -10,7 +10,7 @@ const itemService = {
   // ── Queries ──────────────────────────────────────
 
   /** GET /items — All items with search (q), pagination, status, type */
-  getAllItems: (params?: { q?: string; search?: string; approvalStatus?: string; itemType?: string; page?: number; size?: number }) => {
+  getAllItems: (params?: { q?: string; search?: string; approvalStatus?: string; itemType?: string; status?: string; page?: number; size?: number }) => {
     const { search, ...rest } = params || {};
     const query = rest.q ?? search;
     return api.get<any>('/api/v1/items', {
@@ -46,6 +46,16 @@ const itemService = {
   /** DELETE /items/{id} — Delete item */
   submitDelete: (id: string) =>
     api.delete<CommandResponse>(`/api/v1/items/${id}`),
+
+  /** DELETE /api/v1/items/bulk — Bulk delete items by IDs */
+  bulkDelete: (ids: string[]) =>
+    api.delete<import('../../types').BulkDeleteResponse>('/api/v1/items/bulk', { data: ids }),
+
+  /** Restore a soft-deleted item by setting status back to ACTIVE */
+  restore: async (id: string) => {
+    const item = await itemService.getById(id);
+    return api.put<Item>(`/api/v1/items/${id}`, { ...(item as any), status: 'ACTIVE' });
+  },
 
   // ── Approval ─────────────────────────────────────
 

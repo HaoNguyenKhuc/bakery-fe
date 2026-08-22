@@ -43,6 +43,10 @@ const recipeService = {
   /** POST /api/v1/recipes/cost/{itemId}/apply — Apply calculated unit cost to item */
   applyCost: (itemId: string) =>
     api.post<{ totalCostPerUnit: number }>(`/api/v1/recipes/cost/${itemId}/apply`),
+
+  /** POST /api/v1/recipes/cost/apply-all — Recalculate and apply cost to all items */
+  applyCostAll: () =>
+    api.post<import('../../types').RecipeApplyAllResponse>('/api/v1/recipes/cost/apply-all'),
 };
 
 export default recipeService;

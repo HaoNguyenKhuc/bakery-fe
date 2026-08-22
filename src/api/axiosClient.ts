@@ -1,5 +1,5 @@
 import axios, { AxiosError } from 'axios';
-import type { InternalAxiosRequestConfig } from 'axios';
+import type { InternalAxiosRequestConfig, AxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
 import { message } from 'antd';
 
@@ -200,8 +200,8 @@ const api = {
   patch: <T>(url: string, data?: unknown) =>
     axiosClient.patch<T, T>(url, data),
 
-  delete: <T>(url: string) =>
-    axiosClient.delete<T, T>(url),
+  delete: <T>(url: string, config?: AxiosRequestConfig) =>
+    axiosClient.delete<T, T>(url, config),
 };
 
 export { axiosClient };
