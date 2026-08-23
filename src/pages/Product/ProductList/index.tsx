@@ -892,7 +892,15 @@ const ProductList: React.FC = () => {
       <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e2e8f0', padding: '0 0 16px' }}>
 
         {/* ── ItemType Tabs ── */}
-        <div style={{ display: 'flex', borderBottom: '2px solid #e2e8f0', padding: '0 20px', overflowX: 'auto', alignItems: 'center' }}>
+        <div style={{
+          display: 'flex',
+          borderBottom: '2px solid #e2e8f0',
+          padding: '0 20px',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          scrollbarWidth: 'none',
+          alignItems: 'center',
+        }}>
           {(Object.keys(ITEM_TYPE_LABELS) as ItemType[]).map(type => {
             const { label, emoji, color } = ITEM_TYPE_LABELS[type];
             const active = activeTab === type;

@@ -428,6 +428,8 @@ const ProductMappingPage: React.FC = () => {
                 borderBottom: '2px solid #e2e8f0',
                 marginBottom: 14,
                 overflowX: 'auto',
+                overflowY: 'hidden',
+                scrollbarWidth: 'none',
                 whiteSpace: 'nowrap',
               }}
             >
