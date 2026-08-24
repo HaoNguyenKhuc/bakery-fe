@@ -7,7 +7,7 @@ import {
 import {
   ArrowLeftOutlined, CheckCircleOutlined, ClockCircleOutlined,
   DeleteOutlined, CopyOutlined, ExperimentOutlined, PlusOutlined,
-  CloseOutlined, SaveOutlined, UndoOutlined
+  CloseOutlined, SaveOutlined, UndoOutlined, SyncOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -41,6 +41,7 @@ const RecipeDetail: React.FC = () => {
   const queryClient = useQueryClient();
 
   const [note, setNote] = useState<string>('');
+  const [yieldQuantity, setYieldQuantity] = useState<number | null>(null);
   const [lines, setLines] = useState<EditableLine[]>([]);
 
   // ── Queries ──────────────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ const RecipeDetail: React.FC = () => {
   const initForm = (r?: Recipe) => {
     if (!r) return;
     setNote(r.note || '');
+    setYieldQuantity((r as any).yieldQuantity ?? null);
     const initialLines = r.lines?.map((l, idx) => ({
       // Use random UUID for key to handle additions/deletions robustly
       rowKey: `init-${idx}-${crypto.randomUUID()}`,
@@ -152,6 +154,15 @@ const RecipeDetail: React.FC = () => {
     onError: () => message.error('Xoá thất bại.'),
   });
 
+  const autoFillYieldMut = useMutation({
+    mutationFn: () => recipeService.autoFillYield(),
+    onSuccess: (res: any) => {
+      message.success(`Đã tự động điền sản lượng: ${res?.filled ?? 0} công thức được cập nhật`);
+      invalidate();
+    },
+    onError: () => message.error('Tự động điền sản lượng thất bại.'),
+  });
+
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const handleAddLine = () => {
@@ -205,6 +216,7 @@ const RecipeDetail: React.FC = () => {
       productId: recipe?.product?.id || (recipe?.product as any)?.key,
       semiProductId: recipe?.semiProduct?.id || (recipe?.semiProduct as any)?.key,
       note,
+      yieldQuantity: yieldQuantity ?? undefined,
       lines: payloadLines
     });
   };
@@ -404,10 +416,38 @@ const RecipeDetail: React.FC = () => {
         title={<Text strong>Công thức</Text>}
         style={{ borderRadius: 8 }}
       >
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div>
+            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+              Sản lượng (Yield)
+              <Text type="secondary" style={{ fontSize: 12, fontWeight: 400, marginLeft: 8 }}>
+                — số lượng thành phẩm tạo ra từ 1 mẻ công thức
+              </Text>
+            </Text>
+            <InputNumber
+              min={0.001}
+              step={0.1}
+              style={{ width: 160 }}
+              value={yieldQuantity}
+              onChange={(val) => setYieldQuantity(val)}
+              placeholder="VD: 1.0"
+              addonAfter={(recipe?.product?.unit || recipe?.semiProduct?.unit || '')}
+            />
+          </div>
+          <Button
+            icon={<SyncOutlined />}
+            loading={autoFillYieldMut.isPending}
+            onClick={() => autoFillYieldMut.mutate()}
+            style={{ marginTop: 28 }}
+          >
+            Tự động điền tất cả
+          </Button>
+        </div>
+
         <div style={{ marginBottom: 16 }}>
           <Text strong style={{ display: 'block', marginBottom: 8 }}>Ghi chú công thức</Text>
-          <TextArea 
-            rows={3} 
+          <TextArea
+            rows={3}
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Nhập ghi chú cho công thức này..."

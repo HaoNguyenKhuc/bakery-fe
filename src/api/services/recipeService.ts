@@ -23,6 +23,14 @@ const recipeService = {
   calculateCost: (itemId: string) =>
     api.get<RecipeCostCalculation>(`/api/v1/recipes/cost/${itemId}`),
 
+  /** GET /api/v1/recipes/usage/{itemId} — List products/BTPs that use this item in active recipes */
+  getUsageByItem: (itemId: string) =>
+    api.get<any[]>(`/api/v1/recipes/usage/${itemId}`),
+
+  /** GET /api/v1/recipes/unit-issues — List recipe lines with unit mismatch (no conversion found) */
+  getUnitIssues: () =>
+    api.get<any[]>('/api/v1/recipes/unit-issues'),
+
   // ── Commands ─────────────────────────────────────
 
   create: (data: RecipeRequest) => api.post<Recipe>('/api/v1/recipes', data),
@@ -47,6 +55,10 @@ const recipeService = {
   /** POST /api/v1/recipes/cost/apply-all — Recalculate and apply cost to all items */
   applyCostAll: () =>
     api.post<import('../../types').RecipeApplyAllResponse>('/api/v1/recipes/cost/apply-all'),
+
+  /** POST /api/v1/recipes/yield/auto-fill — Auto-fill yieldQuantity for all active recipes missing it */
+  autoFillYield: () =>
+    api.post<any>('/api/v1/recipes/yield/auto-fill'),
 };
 
 export default recipeService;

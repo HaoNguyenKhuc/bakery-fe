@@ -17,6 +17,7 @@ const Suppliers = React.lazy(() => import('./pages/Suppliers'));
 const ProductMapping = React.lazy(() => import('./pages/ProductMapping'));
 const ItemGroupList = React.lazy(() => import('./pages/Product/ItemGroup'));
 const UnitsPage = React.lazy(() => import('./pages/Units'));
+const UnitConversionsPage = React.lazy(() => import('./pages/UnitConversions'));
 
 // Kế hoạch SX
 const SxConfig = React.lazy(() => import('./pages/SxConfig'));
@@ -96,6 +97,7 @@ const App: React.FC = () => {
         <Route path="product-mapping" element={<Lazy><ProductMapping /></Lazy>} />
         <Route path="item-groups" element={<Lazy><ItemGroupList /></Lazy>} />
         <Route path="units" element={<Lazy><UnitsPage /></Lazy>} />
+        <Route path="unit-conversions" element={<Lazy><UnitConversionsPage /></Lazy>} />
 
         {/* ── Kế hoạch SX ── */}
         <Route path="sx-config" element={<Lazy><SxConfig /></Lazy>} />

@@ -17,6 +17,7 @@ import { itemService, itemGroupService, recipeService } from '../../../api/servi
 import type { Item, ItemType, ItemGroup, RecipeApplyAllResponse } from '../../../types';
 import { useAuthStore } from '../../../store/authStore';
 import { CostCalculationModal } from './CostCalculationModal';
+import { ItemUsageModal } from './ItemUsageModal';
 
 const { Title, Text } = Typography;
 
@@ -138,6 +139,7 @@ const ProductList: React.FC = () => {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecipeApplyAllResponse | null>(null);
+  const [usageItem, setUsageItem] = useState<Item | null>(null);
 
   const debouncedSearch = useDebounce(search, 500);
 
@@ -601,6 +603,13 @@ const ProductList: React.FC = () => {
             >
               Sửa
             </Button>
+            <Tooltip title="Xem sản phẩm đang dùng NL này">
+              <Button
+                size="small"
+                icon={<span>🔍</span>}
+                onClick={() => setUsageItem(record)}
+              />
+            </Tooltip>
             {canApprove && (
               <Button
                 size="small"
@@ -747,6 +756,15 @@ const ProductList: React.FC = () => {
               >
                 Tính giá cost
               </Button>
+            )}
+            {activeTab === 'SEMI_PRODUCT' && (
+              <Tooltip title="Xem SP đang dùng BTP này">
+                <Button
+                  size="small"
+                  icon={<span>🔍</span>}
+                  onClick={() => setUsageItem(record)}
+                />
+              </Tooltip>
             )}
             {canApprove && (
               <Button
@@ -1195,6 +1213,14 @@ const ProductList: React.FC = () => {
           )}
         </Modal>
       )}
+
+      {/* Item Usage Modal */}
+      <ItemUsageModal
+        open={!!usageItem}
+        itemId={usageItem?.id ?? null}
+        itemName={usageItem?.name ?? ''}
+        onClose={() => setUsageItem(null)}
+      />
     </div>
   );
 };
