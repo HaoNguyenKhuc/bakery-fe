@@ -120,6 +120,14 @@ const getIngredientImportPrice = (record: Item): number | null => {
   return Number(cost) * Number(pkg.qtyPerPack);
 };
 
+/** Làm tròn giá về bội số của 1000đ gần nhất */
+const roundPrice = (val: number): number => Math.round(val / 1000) * 1000;
+
+const fmtPrice = (val: number | string | null | undefined): string => {
+  if (val == null || val === '') return '—';
+  return roundPrice(Number(val)).toLocaleString('vi-VN') + ' đ';
+};
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 const ProductList: React.FC = () => {
@@ -140,6 +148,7 @@ const ProductList: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecipeApplyAllResponse | null>(null);
   const [usageItem, setUsageItem] = useState<Item | null>(null);
+  const [onlyActive, setOnlyActive] = useState<boolean>(true);
 
   const debouncedSearch = useDebounce(search, 500);
 
@@ -163,7 +172,7 @@ const ProductList: React.FC = () => {
     isError: pagedError,
     refetch: refetchPaged,
   } = useQuery({
-    queryKey: ['items-paged', activeTab, debouncedSearch, page, statusFilter],
+    queryKey: ['items-paged', activeTab, debouncedSearch, page, statusFilter, onlyActive],
     queryFn: () => {
       if (isDeleted) {
         return itemService.getAllItems({
@@ -176,6 +185,7 @@ const ProductList: React.FC = () => {
       }
       return itemService.getAllItems({
         itemType: activeTab,
+        status: onlyActive ? 'ACTIVE' : undefined,
         q: debouncedSearch.trim() || undefined,
         approvalStatus: statusFilter ?? undefined,
         page,
@@ -350,6 +360,7 @@ const ProductList: React.FC = () => {
           ? (recipeInfo.active ? 'Có (Hoạt động)' : 'Có (Chưa kích hoạt)')
           : 'Chưa có';
         const cost = item.unitCost ?? (item as any).lastPrice ?? '';
+        const costRounded = cost !== '' ? roundPrice(Number(cost)) : '';
 
         if (activeTab === 'PRODUCT') {
           return {
@@ -358,7 +369,7 @@ const ProductList: React.FC = () => {
             'Mã': item.code,
             'Tên sản phẩm': item.name,
             'Đơn vị': item.unit,
-            'Giá vốn (VNĐ)': cost ? Number(cost) : '',
+            'Giá vốn (VNĐ)': costRounded,
             'Giá bán (VNĐ)': item.sellingPrice ? Number(item.sellingPrice) : '',
             'Công thức': recipeText,
             'Trạng thái': item.approvalStatus,
@@ -369,7 +380,7 @@ const ProductList: React.FC = () => {
             'Mã': item.code,
             'Tên bán thành phẩm': item.name,
             'Đơn vị': item.unit,
-            'Giá vốn (VNĐ)': cost ? Number(cost) : '',
+            'Giá vốn (VNĐ)': costRounded,
             'Công thức': recipeText,
             'Trạng thái': item.approvalStatus,
           };
@@ -384,7 +395,7 @@ const ProductList: React.FC = () => {
             'Tên nguyên liệu': item.name,
             'Nhà cung cấp': supplierName,
             'Đơn vị': item.unit,
-            'Giá vốn / Giá nhập (VNĐ)': cost ? Number(cost) : '',
+            'Giá vốn / Giá nhập (VNĐ)': costRounded,
             'Trạng thái': item.approvalStatus,
           };
         } else {
@@ -394,7 +405,7 @@ const ProductList: React.FC = () => {
             'Mã': item.code,
             'Tên': item.name,
             'Đơn vị': item.unit,
-            'Giá vốn / Giá lẻ (VNĐ)': cost ? Number(cost) : '',
+            'Giá vốn / Giá lẻ (VNĐ)': costRounded,
             'Trạng thái': item.status,
           };
         }
@@ -550,7 +561,7 @@ const ProductList: React.FC = () => {
         const giaNhap = Number(cost) * Number(pkg.qtyPerPack);
         return (
           <Text style={{ fontWeight: 500, color: '#0f172a' }}>
-            {Number(giaNhap).toLocaleString('vi-VN')} đ
+            {fmtPrice(giaNhap)}
           </Text>
         );
       },
@@ -571,7 +582,7 @@ const ProductList: React.FC = () => {
         if (cost == null) return <Text type="secondary">—</Text>;
         return (
           <Text style={{ fontWeight: 500, color: '#0f172a' }}>
-            {Number(cost).toLocaleString('vi-VN')} đ
+            {fmtPrice(cost)}
           </Text>
         );
       },
@@ -678,7 +689,7 @@ const ProductList: React.FC = () => {
         if (val == null) return <Text type="secondary">—</Text>;
         return (
           <Text style={{ fontWeight: 500, color: '#b45309' }}>
-            {Number(val).toLocaleString('vi-VN')} đ
+            {fmtPrice(val)}
           </Text>
         );
       },
@@ -828,7 +839,7 @@ const ProductList: React.FC = () => {
       sorter: (a, b) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
       render: (_: unknown, record: Item) => {
         const val = record.unitCost ?? record.lastPrice;
-        return val != null ? `${Number(val).toLocaleString('vi-VN')} đ` : '—';
+        return fmtPrice(val);
       },
     },
     {
@@ -1054,8 +1065,24 @@ const ProductList: React.FC = () => {
             )}
           </div>
 
-          {/* Right: Export & Delete buttons */}
+          {/* Right: Active toggle + Export & Delete buttons */}
           <Space>
+            {!isDeleted && (
+              <Button
+                size="small"
+                onClick={() => { setOnlyActive(v => !v); setPage(0); }}
+                style={{
+                  borderRadius: 14,
+                  fontWeight: 600,
+                  fontSize: 12,
+                  background: onlyActive ? '#dcfce7' : '#f1f5f9',
+                  color: onlyActive ? '#16a34a' : '#64748b',
+                  borderColor: onlyActive ? '#16a34a' : '#cbd5e1',
+                }}
+              >
+                {onlyActive ? '✓ Chỉ Active' : '☰ Tất cả trạng thái'}
+              </Button>
+            )}
             <Button
               icon={<FileExcelOutlined />}
               style={{ color: '#16a34a', borderColor: '#16a34a' }}

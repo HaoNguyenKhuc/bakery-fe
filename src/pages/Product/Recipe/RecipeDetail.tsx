@@ -13,6 +13,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import { recipeService, itemService } from '../../../api/services';
+import unitService from '../../../api/services/unitService';
 import type { Recipe, RecipeLineRequest, Product } from '../../../types';
 
 const { Title, Text } = Typography;
@@ -75,6 +76,56 @@ const RecipeDetail: React.FC = () => {
         raw: i,
       }));
   }, [allItems]);
+
+  // Map itemId → item for quick cost lookup
+  const itemMap = useMemo(() => new Map(allItems.map(i => [i.id, i])), [allItems]);
+
+  // Unit conversions for KG calculation
+  const { data: conversionsRaw = [] } = useQuery({
+    queryKey: ['unit-conversions'],
+    queryFn: () => unitService.getConversions(),
+    staleTime: 60_000,
+  });
+  const conversions: any[] = Array.isArray(conversionsRaw) ? conversionsRaw : [];
+
+  // Convert any unit → KG via conversion table (returns null if no path found)
+  const toKg = (qty: number, unit: string): number | null => {
+    if (!unit) return null;
+    const u = unit.trim().toUpperCase();
+    if (u === 'KG') return qty;
+    const conv = conversions.find(
+      (c: any) => c.fromUnit?.toUpperCase() === u && c.toUnit?.toUpperCase() === 'KG'
+    );
+    if (conv) return qty * Number(conv.factor);
+    // Try reverse
+    const rev = conversions.find(
+      (c: any) => c.toUnit?.toUpperCase() === u && c.fromUnit?.toUpperCase() === 'KG'
+    );
+    if (rev) return qty / Number(rev.factor);
+    // G → KG shortcut
+    if (u === 'G') return qty / 1000;
+    if (u === 'MG') return qty / 1_000_000;
+    if (u === 'ML') return qty / 1000; // approx for liquids
+    if (u === 'L') return qty;          // 1L ≈ 1KG
+    return null;
+  };
+
+  // Computed: total cost and total KG from lines
+  const { totalCost, totalKgCalc, totalKgHasGap } = useMemo(() => {
+    let cost = 0;
+    let kg = 0;
+    let hasGap = false;
+    for (const l of lines) {
+      const item = itemMap.get(l.itemId || '');
+      const unitCost = (item as any)?.unitCost ?? null;
+      if (unitCost != null) cost += Number(unitCost) * l.quantity;
+      const lineKg = toKg(l.quantity, l.unit);
+      if (lineKg != null) kg += lineKg;
+      else hasGap = true;
+    }
+    return { totalCost: cost, totalKgCalc: kg, totalKgHasGap: hasGap };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, itemMap, conversions]);
 
   // ── Initialize Form ──────────────────────────────────────────────────────────
   
@@ -271,6 +322,39 @@ const RecipeDetail: React.FC = () => {
       ),
     },
     {
+      title: 'Đơn giá',
+      key: 'unitPrice',
+      width: 130,
+      align: 'right' as const,
+      render: (_: unknown, line: EditableLine) => {
+        const item = itemMap.get(line.itemId || '');
+        const cost = (item as any)?.unitCost;
+        if (cost == null) return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+        return (
+          <Text style={{ fontSize: 12, color: '#64748b' }}>
+            {Math.round(Number(cost)).toLocaleString('vi-VN')} đ
+          </Text>
+        );
+      },
+    },
+    {
+      title: 'Thành tiền',
+      key: 'lineTotal',
+      width: 140,
+      align: 'right' as const,
+      render: (_: unknown, line: EditableLine) => {
+        const item = itemMap.get(line.itemId || '');
+        const cost = (item as any)?.unitCost;
+        if (cost == null || !line.quantity) return <Text type="secondary" style={{ fontSize: 12 }}>—</Text>;
+        const total = Number(cost) * line.quantity;
+        return (
+          <Text strong style={{ fontSize: 12, color: '#0f172a' }}>
+            {Math.round(total).toLocaleString('vi-VN')} đ
+          </Text>
+        );
+      },
+    },
+    {
       title: 'Sort',
       key: 'sortOrder',
       width: 100,
@@ -464,15 +548,63 @@ const RecipeDetail: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
 
-        <Button 
-          icon={<PlusOutlined />} 
-          onClick={handleAddLine}
-          style={{ marginBottom: 24 }}
-        >
-          Thêm dòng
-        </Button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Button icon={<PlusOutlined />} onClick={handleAddLine}>
+            Thêm dòng
+          </Button>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          {/* Summary row */}
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {/* Tổng thành tiền */}
+            {totalCost > 0 && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Tổng thành tiền</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: '#b45309' }}>
+                  {Math.round(totalCost).toLocaleString('vi-VN')} đ
+                </div>
+              </div>
+            )}
+
+            {/* KG tự tính + haohut */}
+            <div style={{
+              background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8,
+              padding: '8px 14px', minWidth: 180,
+            }}>
+              <div style={{ fontSize: 11, color: '#0369a1', fontWeight: 600, marginBottom: 4 }}>
+                ⚖ Khối lượng mẻ (KG)
+              </div>
+              <div style={{ display: 'flex', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: '#64748b' }}>Tự tính</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a' }}>
+                    {totalKgCalc > 0
+                      ? `${totalKgCalc.toFixed(3)} KG${totalKgHasGap ? ' ⚠' : ''}`
+                      : <span style={{ color: '#94a3b8' }}>—</span>
+                    }
+                  </div>
+                </div>
+                {yieldQuantity != null && totalKgCalc > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: '#64748b' }}>Hao hụt</div>
+                    <div style={{
+                      fontSize: 13, fontWeight: 600,
+                      color: (totalKgCalc - yieldQuantity) > 0.001 ? '#dc2626' : '#16a34a',
+                    }}>
+                      {totalKgCalc - yieldQuantity >= 0 ? '+' : ''}
+                      {(totalKgCalc - yieldQuantity).toFixed(3)} KG
+                      {' '}
+                      <span style={{ fontWeight: 400, fontSize: 11 }}>
+                        ({totalKgCalc > 0 ? (((totalKgCalc - yieldQuantity) / totalKgCalc) * 100).toFixed(1) : 0}%)
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 8 }}>
           <Button 
             icon={<UndoOutlined />} 
             onClick={handleCancel}
