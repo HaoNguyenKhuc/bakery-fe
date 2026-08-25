@@ -759,14 +759,14 @@ const ProductList: React.FC = () => {
               Sửa
             </Button>
             {isProductOrSemi && isApproved && (
-              <Button
-                size="small"
-                icon={<DollarOutlined />}
-                style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
-                onClick={() => setCostModalItem(record)}
-              >
-                Tính giá cost
-              </Button>
+              <Tooltip title="Tính giá cost">
+                <Button
+                  size="small"
+                  icon={<DollarOutlined />}
+                  style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
+                  onClick={() => setCostModalItem(record)}
+                />
+              </Tooltip>
             )}
             {activeTab === 'SEMI_PRODUCT' && (
               <Tooltip title="Xem SP đang dùng BTP này">

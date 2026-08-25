@@ -343,6 +343,11 @@ export interface ItemRequest {
   sellingPrice?: number;
 
   recipe?: RecipeRequest;
+
+  // Recipe fields — gửi phẳng vào PUT/POST /api/v1/items (khớp với backend ItemRequest.java)
+  recipeNote?: string | null;
+  recipeYieldQuantity?: number | null;
+  recipeLines?: RecipeLineRequest[];
 }
 
 export type Product = Item;

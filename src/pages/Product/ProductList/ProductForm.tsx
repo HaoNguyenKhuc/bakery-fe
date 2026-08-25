@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Form, Select, Input, InputNumber, Row, Col, Card, Button,
-  Space, message, Typography, Divider, Tag, Table, Popconfirm, Checkbox
+  Space, message, Typography, Divider, Tag, Table, Popconfirm, Checkbox, Tooltip
 } from 'antd';
 import {
   PlusOutlined, ArrowLeftOutlined, SaveOutlined,
@@ -9,11 +9,12 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { itemService, recipeService, itemGroupService, supplierService } from '../../../api/services';
+import { itemService, itemGroupService, supplierService, recipeService } from '../../../api/services';
 import unitService from '../../../api/services/unitService';
 import type { ProductRequest, ItemPackaging, ItemPackagingRequest } from '../../../types';
 
 const { Title, Text } = Typography;
+const { TextArea } = Input;
 
 // Helper: extract array from various API response shapes
 const extractArray = (data: any): any[] => {
@@ -46,6 +47,9 @@ const ProductForm: React.FC = () => {
    */
   const [giaNhapInput, setGiaNhapInput] = useState<number | null>(null);
 
+  // ── Recipe Yield State (SEMI_PRODUCT & PRODUCT) ─────────────────────────────
+  const [yieldQuantity, setYieldQuantity] = useState<number | null>(null);
+
   // ── Queries ──────────────────────────────────────────────────────────────────
 
   const { data: allItemsData } = useQuery({
@@ -55,6 +59,7 @@ const ProductForm: React.FC = () => {
   const allItems = extractArray(allItemsData);
   const ingredients = allItems.filter((i: any) => i.itemType === 'INGREDIENT');
   const semiProducts = allItems.filter((i: any) => i.itemType === 'SEMI_PRODUCT');
+  const itemMap = useMemo(() => new Map(allItems.map((i: any) => [i.id, i])), [allItems]);
 
   const { data: itemGroupsData } = useQuery({
     queryKey: ['itemGroups'],
@@ -68,6 +73,33 @@ const ProductForm: React.FC = () => {
   });
   const units = extractArray(unitsData);
 
+  const { data: conversionsRaw = [] } = useQuery({
+    queryKey: ['unit-conversions'],
+    queryFn: () => unitService.getConversions(),
+    staleTime: 60_000,
+  });
+  const conversions: any[] = Array.isArray(conversionsRaw) ? conversionsRaw : [];
+
+  // Convert any unit → KG via conversion table
+  const toKg = (qty: number, unit: string): number | null => {
+    if (!unit || !qty) return null;
+    const u = unit.trim().toUpperCase();
+    if (u === 'KG') return qty;
+    const conv = conversions.find(
+      (c: any) => c.fromUnit?.toUpperCase() === u && c.toUnit?.toUpperCase() === 'KG'
+    );
+    if (conv) return qty * Number(conv.factor);
+    const rev = conversions.find(
+      (c: any) => c.toUnit?.toUpperCase() === u && c.fromUnit?.toUpperCase() === 'KG'
+    );
+    if (rev) return qty / Number(rev.factor);
+    if (u === 'G' || u === 'GRAM' || u === 'GR') return qty / 1000;
+    if (u === 'MG') return qty / 1_000_000;
+    if (u === 'ML') return qty / 1000;
+    if (u === 'L' || u === 'LIT' || u === 'LÍT') return qty;
+    return null;
+  };
+
   const { data: suppliersData } = useQuery({
     queryKey: ['suppliers', 'all'],
     queryFn: () => supplierService.getAll(),
@@ -78,6 +110,8 @@ const ProductForm: React.FC = () => {
     queryKey: ['item', id],
     queryFn: () => itemService.getById(id!),
     enabled: isEdit,
+    staleTime: 0,           // Luôn coi dữ liệu là cũ → gọi API mới mỗi lần vào trang edit
+    refetchOnMount: 'always', // Đảm bảo gọi lại dù cache vẫn còn
   });
 
   // ── Populate form when editing ────────────────────────────────────────────────
@@ -127,7 +161,7 @@ const ProductForm: React.FC = () => {
       let recipe = undefined;
       if (rawRecipe && Array.isArray(rawRecipe.lines)) {
         recipe = {
-          ...rawRecipe,
+          note: rawRecipe.note || undefined,
           lines: rawRecipe.lines.map((l: any) => {
             const targetKey = l.itemId || l.item?.id || l.item?.key;
             const matchedItem = allItems.find(
@@ -140,6 +174,9 @@ const ProductForm: React.FC = () => {
           }),
         };
       }
+
+      const rawYield = editProduct.recipe?.yieldQuantity ?? editProduct.activeRecipe?.yieldQuantity ?? editProduct.recipeYieldQuantity ?? null;
+      setYieldQuantity(rawYield != null ? Number(rawYield) : null);
 
       form.setFieldsValue({
         code: editProduct.code,
@@ -157,6 +194,7 @@ const ProductForm: React.FC = () => {
       });
     } else if (!isEdit) {
       form.resetFields();
+      setYieldQuantity(null);
     }
   }, [isEdit, itemData, itemGroups, allItems, suppliers, form]);
 
@@ -209,44 +247,66 @@ const ProductForm: React.FC = () => {
     form.setFieldValue('unitCost', newGiaLe > 0 ? newGiaLe : null);
   }, [packagings, form, giaNhapInput]);
 
+  // ── Recipe Calculations (Total KG & Cost) ──────────────────────────────────
+  const watchedRecipeLines = Form.useWatch(['recipe', 'lines'], form) || [];
+
+  const { totalCost, totalKgCalc, totalKgHasGap } = useMemo(() => {
+    let cost = 0;
+    let kg = 0;
+    let hasGap = false;
+    for (const l of watchedRecipeLines) {
+      if (!l || !l.itemId) continue;
+      const item = itemMap.get(l.itemId);
+      const unitCost = (item as any)?.unitCost ?? null;
+      const qty = Number(l.quantity) || 0;
+      if (unitCost != null && qty > 0) cost += Number(unitCost) * qty;
+      const lineKg = toKg(qty, l.unit);
+      if (lineKg != null) kg += lineKg;
+      else if (qty > 0) hasGap = true;
+    }
+    return { totalCost: cost, totalKgCalc: kg, totalKgHasGap: hasGap };
+  }, [watchedRecipeLines, itemMap, conversions]);
 
   // ── Mutation ─────────────────────────────────────────────────────────────────
 
   const mutation = useMutation({
     mutationFn: async (values: ProductRequest) => {
+      // Chuẩn hoá recipeLines → gửi phẳng trong ItemRequest (khớp backend ItemRequest.java)
+      const rawLines: any[] = values.recipe?.lines || [];
+      const recipeLines = rawLines
+        .filter((l: any) => l?.itemId)
+        .map((l: any, idx: number) => ({
+          itemId: l.itemId,
+          quantity: Number(l.quantity),
+          unit: l.unit,
+          sortOrder: l.sortOrder ?? idx + 1,
+        }));
+
+      // Nếu user nhập thực tế thì lấy yieldQuantity, nếu để trống và có totalKgCalc > 0 thì tự động lấy totalKgCalc
+      const finalYield = yieldQuantity != null ? yieldQuantity : (totalKgCalc > 0 ? totalKgCalc : null);
+
       const payload = {
         ...values,
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
         shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
+        // Gửi recipe phẳng theo đúng chuẩn backend — KHÔNG gọi recipeService.create riêng
+        recipeNote: values.recipe?.note ?? null,
+        recipeYieldQuantity: finalYield,
+        recipeLines: recipeLines.length > 0 ? recipeLines : undefined,
+        // Bỏ trường recipe lồng nhau để tránh backend bỏ qua recipeLines
+        recipe: undefined,
       };
+
       let savedItem: any;
       if (isEdit) {
         savedItem = await itemService.submitUpdate(id!, payload);
       } else {
         savedItem = await itemService.submitCreate(payload);
       }
-
-      const recipeLines = values.recipe?.lines;
-      if (recipeLines && recipeLines.length > 0) {
-        const itemId = savedItem?.id || savedItem?.data?.id || id;
-        if (itemId) {
-          try {
-            await recipeService.create({
-              ...(values.itemType === 'PRODUCT'
-                ? { productId: itemId }
-                : { semiProductId: itemId }),
-              note: values.recipe?.note,
-              lines: recipeLines,
-            });
-          } catch {
-            throw new Error('Sản phẩm đã được lưu nhưng tạo công thức thất bại.');
-          }
-        }
-      }
       return savedItem;
     },
     onSuccess: async (savedItem: any) => {
-      // 3e — Create flow: nếu tạo mới INGREDIENT + có packaging rows → lưu sau khi có ID
+      // Create flow: nếu tạo mới INGREDIENT + có packaging rows → lưu sau khi có ID
       const newId = savedItem?.id || savedItem?.data?.id;
       const itemType = form.getFieldValue('itemType');
       if (!isEdit && newId && itemType === 'INGREDIENT' && packagings.length > 0) {
@@ -260,15 +320,15 @@ const ProductForm: React.FC = () => {
         }
       }
       message.success(isEdit ? 'Cập nhật thành công' : 'Tạo mới thành công');
+      // Invalidate đầy đủ: cả list lẫn detail của item này
       queryClient.invalidateQueries({ queryKey: ['items'] });
+      if (isEdit && id) {
+        queryClient.invalidateQueries({ queryKey: ['item', id] });
+      }
       navigate('/products');
     },
     onError: (error: any) => {
       message.error(error.message || (isEdit ? 'Cập nhật thất bại' : 'Tạo mới thất bại'));
-      if (error.message === 'Sản phẩm đã được lưu nhưng tạo công thức thất bại.') {
-        queryClient.invalidateQueries({ queryKey: ['items'] });
-        navigate('/products');
-      }
     }
   });
 
@@ -822,6 +882,95 @@ const ProductForm: React.FC = () => {
                 extra={<Text type="secondary">Tùy chọn — có thể thêm sau trong mục Công Thức</Text>}
                 style={{ marginBottom: 24 }}
               >
+                {/* ⚖ Khối lượng mẻ (KG) & Tổng thành tiền */}
+                <div style={{
+                  padding: '12px 16px',
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: 8,
+                  marginBottom: 16,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, color: '#0369a1', fontWeight: 600 }}>
+                      ⚖ Khối lượng mẻ (KG)
+                    </div>
+                    {totalCost > 0 && (
+                      <div style={{ fontSize: 13 }}>
+                        <span style={{ color: '#64748b', marginRight: 6 }}>Tổng thành tiền dự tính:</span>
+                        <strong style={{ color: '#b45309', fontSize: 15 }}>
+                          {Math.round(totalCost).toLocaleString('vi-VN')} đ
+                        </strong>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                    {/* Tự tính */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Tự tính:</span>
+                      <Input
+                        readOnly
+                        value={totalKgCalc > 0 ? `${totalKgCalc.toFixed(3)}${totalKgHasGap ? ' ⚠' : ''}` : '—'}
+                        suffix="KG"
+                        style={{
+                          width: 120,
+                          fontWeight: 700,
+                          color: '#0c4a6e',
+                          background: '#e0f2fe',
+                          cursor: 'default',
+                        }}
+                        title="Tổng KG nguyên liệu trong công thức — tự động tính"
+                      />
+                    </div>
+
+                    {/* Thực tế */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Thực tế:</span>
+                      <InputNumber
+                        min={0.001}
+                        step={0.001}
+                        placeholder="Nhập..."
+                        value={yieldQuantity}
+                        onChange={(val) => setYieldQuantity(val)}
+                        addonAfter="KG"
+                        style={{ width: 145, fontWeight: 600 }}
+                        title="Khối lượng thực tế sản phẩm BTP thu được sau khi sản xuất. Dùng để tính đơn giá/KG và so sánh hao hụt."
+                      />
+                      {yieldQuantity != null && (
+                        <Button
+                          size="small"
+                          type="link"
+                          onClick={() => setYieldQuantity(null)}
+                          style={{ padding: '0 4px', fontSize: 12 }}
+                        >
+                          Reset
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Hao hụt */}
+                    <div>
+                      {totalKgCalc > 0 && yieldQuantity != null ? (
+                        (() => {
+                          const diff = totalKgCalc - yieldQuantity;
+                          const pct = ((diff / totalKgCalc) * 100).toFixed(1);
+                          if (Math.abs(diff) < 0.0001) {
+                            return <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 13 }}>✓ Không hao hụt</span>;
+                          }
+                          return (
+                            <span style={{ fontSize: 13, color: diff > 0 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                              {diff > 0 ? 'Hao hụt: +' : 'Dư ra: '}
+                              {diff.toFixed(3)} KG ({diff > 0 ? '+' : ''}{pct}%)
+                            </span>
+                          );
+                        })()
+                      ) : totalKgCalc > 0 ? (
+                        <span style={{ fontSize: 12, color: '#94a3b8' }}>← Nhập thực tế để so sánh hao hụt</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
                 <Form.List name={['recipe', 'lines']}>
                   {(fields, { add, remove }) => {
                     const columns = [
@@ -962,12 +1111,148 @@ const ProductForm: React.FC = () => {
                     );
                   }}
                 </Form.List>
+
+                {/* Recipe Note */}
+                <div style={{ marginTop: 16, marginBottom: 0 }}>
+                  <Text strong style={{ display: 'block', marginBottom: 6 }}>
+                    Ghi chú công thức
+                  </Text>
+                  <Form.Item name={['recipe', 'note']} style={{ margin: 0 }}>
+                    <TextArea
+                      rows={2}
+                      placeholder="Nhập ghi chú cho công thức này (tùy chọn)..."
+                    />
+                  </Form.Item>
+                </div>
               </Card>
             );
           }}
         </Form.Item>
+
+        {/* Usage Section (INGREDIENT & SEMI_PRODUCT only in edit mode) */}
+        {isEdit && (
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
+            {({ getFieldValue }) => {
+              const t = getFieldValue('itemType');
+              if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
+
+              return (
+                <Card
+                  title={
+                    <Space>
+                      <span>📦 Dùng trong sản phẩm</span>
+                      <Text type="secondary" style={{ fontSize: 12, fontWeight: 400 }}>
+                        (active recipe)
+                      </Text>
+                    </Space>
+                  }
+                  style={{ marginBottom: 24 }}
+                >
+                  <ItemUsageTable itemId={id!} />
+                </Card>
+              );
+            }}
+          </Form.Item>
+        )}
       </Form>
     </div>
+  );
+};
+
+// ─── Inline Usage Table for INGREDIENT & SEMI_PRODUCT ─────────────────────────
+
+const ItemUsageTable: React.FC<{ itemId: string }> = ({ itemId }) => {
+  const navigate = useNavigate();
+  const { data: usageList = [], isLoading, isError } = useQuery({
+    queryKey: ['item-usage', itemId],
+    queryFn: () => recipeService.getUsageByItem(itemId),
+    enabled: !!itemId,
+    staleTime: 30_000,
+  });
+
+  const columns = [
+    {
+      title: 'Mã',
+      dataIndex: 'productCode',
+      width: 140,
+      render: (v: string) => <Text code>{v}</Text>,
+    },
+    {
+      title: 'Tên sản phẩm / BTP',
+      dataIndex: 'productName',
+      render: (v: string) => <Text strong>{v}</Text>,
+    },
+    {
+      title: 'Loại',
+      dataIndex: 'productType',
+      width: 150,
+      render: (v: string) => (
+        <Tag color={v === 'PRODUCT' ? 'blue' : 'purple'}>
+          {v === 'PRODUCT' ? 'Sản phẩm' : 'Bán thành phẩm'}
+        </Tag>
+      ),
+    },
+    {
+      title: 'Số lượng dùng',
+      key: 'quantity',
+      width: 160,
+      align: 'right' as const,
+      render: (_: any, r: any) => (
+        <span>
+          <strong>{Number(r.quantity).toLocaleString('vi-VN')}</strong>{' '}
+          <Text type="secondary">{r.unit}</Text>
+        </span>
+      ),
+    },
+    {
+      title: 'Phiên bản CT',
+      dataIndex: 'recipeVersion',
+      width: 120,
+      align: 'center' as const,
+      render: (v: number) => <Tag color="green">v{v}</Tag>,
+    },
+    {
+      title: '',
+      width: 100,
+      render: (_: any, r: any) => (
+        <Button
+          size="small"
+          onClick={() => {
+            navigate(`/products/edit/${r.productId}`);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        >
+          Xem CT
+        </Button>
+      ),
+    },
+  ];
+
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>Đang tải danh sách sử dụng...</div>;
+  }
+
+  if (isError) {
+    return <div style={{ color: '#ef4444', fontSize: 13 }}>Không thể tải danh sách sản phẩm sử dụng.</div>;
+  }
+
+  if (!usageList || usageList.length === 0) {
+    return (
+      <div style={{ color: '#94a3b8', fontSize: 13, padding: '8px 0' }}>
+        Chưa có sản phẩm nào dùng NL/BTP này trong công thức đang active.
+      </div>
+    );
+  }
+
+  return (
+    <Table
+      columns={columns}
+      dataSource={usageList}
+      rowKey={(r: any) => r.productId || r.productCode}
+      pagination={false}
+      size="small"
+      bordered
+    />
   );
 };
 
