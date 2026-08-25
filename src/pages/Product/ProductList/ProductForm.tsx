@@ -465,21 +465,14 @@ const ProductForm: React.FC = () => {
             </Col>
           </Row>
 
-          {/* Row 2: Code + Tên */}
+          {/* Row 2: Tên (code ẩn — tự sinh khi tạo mới) */}
+          {/* Hidden code field — vẫn submit lên backend, user không nhìn thấy */}
+          <Form.Item name="code" style={{ display: 'none' }}>
+            <Input />
+          </Form.Item>
+
           <Row gutter={24}>
-            <Col xs={24} md={10}>
-              <Form.Item
-                name="code"
-                label="Mã"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập mã' },
-                  { max: 50, message: 'Tối đa 50 ký tự' },
-                ]}
-              >
-                <Input placeholder="VD: BM001" disabled={isEdit} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={14}>
+            <Col xs={24} md={24}>
               <Form.Item
                 name="name"
                 label="Tên"
@@ -488,7 +481,32 @@ const ProductForm: React.FC = () => {
                   { max: 200, message: 'Tối đa 200 ký tự' },
                 ]}
               >
-                <Input placeholder="VD: Bánh Mì Bơ Tỏi" />
+                <Input
+                  placeholder="VD: Bánh Mì Bơ Tỏi"
+                  onChange={(e) => {
+                    if (!isEdit) {
+                      // Auto-generate code từ tên sản phẩm khi tạo mới
+                      const raw = e.target.value;
+                      if (!raw.trim()) return;
+                      const normalized = raw
+                        .normalize('NFD')
+                        .replace(/[\u0300-\u036f]/g, '')
+                        .replace(/[đĐ]/g, 'd')
+                        .replace(/[^a-zA-Z0-9\s]/g, '')
+                        .trim();
+                      const initials = normalized
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 5)
+                        .map((w: string) => w[0].toUpperCase())
+                        .join('');
+                      // Suffix = timestamp base36 (4 chars) + 2 random digits → rất ít khả năng trùng
+                      const tsPart = Date.now().toString(36).slice(-4).toUpperCase();
+                      const randPart = Math.floor(10 + Math.random() * 90);
+                      form.setFieldValue('code', `${initials}${tsPart}${randPart}`);
+                    }
+                  }}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -524,31 +542,8 @@ const ProductForm: React.FC = () => {
                 <Checkbox>Có thể xuất lẻ</Checkbox>
               </Form.Item>
             </Col>
-
-            <Form.Item
-              noStyle
-              shouldUpdate={(prev, cur) => prev.splittable !== cur.splittable}
-            >
-              {({ getFieldValue }) =>
-                getFieldValue('splittable') ? (
-                  <Col xs={24} md={10}>
-                    <Form.Item
-                      name="unitSize"
-                      label="Kích cỡ"
-                      rules={[{ required: true, message: 'Nhập kích cỡ' }]}
-                    >
-                      <InputNumber
-                        min={0}
-                        step={0.5}
-                        style={{ width: '100%' }}
-                        placeholder="0.0"
-                      />
-                    </Form.Item>
-                  </Col>
-                ) : null
-              }
-            </Form.Item>
           </Row>
+
 
           {/* Conditional fields for INGREDIENT */}
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
@@ -712,24 +707,56 @@ const ProductForm: React.FC = () => {
                 );
               }
 
+              // ── SEMI_PRODUCT: Giá vốn = Tổng thành tiền dự tính (disabled, auto từ recipe) ────
+              const numFmtSemi = (v: number | string | undefined) =>
+                v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+              const numParseSemi = (v: string | undefined) => v?.replace(/,/g, '') as any;
 
-              // ── SEMI_PRODUCT: giữ nguyên 1 input Giá vốn ───────────────────
+              // Sync unitCost với totalCost mỗi lần totalCost thay đổi
+              if (totalCost > 0) {
+                const current = form.getFieldValue('unitCost');
+                if (current !== Math.round(totalCost)) {
+                  form.setFieldValue('unitCost', Math.round(totalCost));
+                }
+              }
+
               return (
                 <Row gutter={24}>
                   <Col xs={24} md={12}>
-                    <Form.Item name="unitCost" label="Giá vốn (đ/đvt) — Nhập tay">
+                    <Form.Item
+                      name="unitCost"
+                      label={
+                        <span>
+                          Giá vốn&nbsp;
+                          <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
+                            (đ/đvt — tự tính từ công thức)
+                          </span>
+                        </span>
+                      }
+                      tooltip="Tự động lấy từ Tổng thành tiền dự tính của công thức. Không thể nhập tay."
+                    >
                       <InputNumber
+                        disabled
                         min={0}
-                        step={1000}
-                        style={{ width: '100%' }}
-                        placeholder="0"
-                        formatter={(value) =>
-                          value ? `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : ''
-                        }
-                        parser={(value) => value?.replace(/,/g, '') as any}
+                        style={{
+                          width: '100%',
+                          background: '#e0f2fe',
+                          color: '#0c4a6e',
+                          fontWeight: 600,
+                        }}
+                        placeholder={totalCost > 0 ? '' : '— Chưa có công thức —'}
+                        formatter={numFmtSemi}
+                        parser={numParseSemi}
                       />
                     </Form.Item>
                   </Col>
+                  {totalCost > 0 && (
+                    <Col xs={24} md={12} style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 24 }}>
+                      <span style={{ fontSize: 12, color: '#0369a1' }}>
+                        💡 Tổng thành tiền dự tính: <strong>{Math.round(totalCost).toLocaleString('vi-VN')} đ</strong>
+                      </span>
+                    </Col>
+                  )}
                 </Row>
               );
             }}
@@ -882,7 +909,8 @@ const ProductForm: React.FC = () => {
                 extra={<Text type="secondary">Tùy chọn — có thể thêm sau trong mục Công Thức</Text>}
                 style={{ marginBottom: 24 }}
               >
-                {/* ⚖ Khối lượng mẻ (KG) & Tổng thành tiền */}
+                {/* ⚖ Khối lượng mẻ (KG) — chỉ hiện cho SEMI_PRODUCT */}
+                {t === 'SEMI_PRODUCT' && (
                 <div style={{
                   padding: '12px 16px',
                   background: '#f0f9ff',
@@ -970,6 +998,7 @@ const ProductForm: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                )}
 
                 <Form.List name={['recipe', 'lines']}>
                   {(fields, { add, remove }) => {
