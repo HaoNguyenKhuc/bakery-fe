@@ -1,3 +1,4 @@
+import CodeInput from '../../../components/CodeInput';
 import React from 'react';
 import {
   Row, Col, Card, Form, Input, InputNumber, Button,
@@ -143,7 +144,9 @@ const ItemGroupList: React.FC = () => {
                   { whitespace: true, message: 'Code không được chỉ chứa khoảng trắng!' }
                 ]}
               >
-                <Input placeholder="VD: PL" style={{ textTransform: 'uppercase' }} />
+                <CodeInput placeholder="VD: NMH001" prefix="NMH" entity="itemGroup"
+                  style={{ textTransform: 'uppercase' }}
+                  onGenerate={(c) => form.setFieldValue('code', c)} />
               </Form.Item>
 
               <Form.Item

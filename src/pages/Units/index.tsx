@@ -1,3 +1,4 @@
+import CodeInput from '../../components/CodeInput';
 import React, { useState } from 'react';
 import {
   Card, Table, Button, Modal, Form, Input, InputNumber, Select,
@@ -50,9 +51,11 @@ const UnitModal: React.FC<UnitModalProps> = ({ open, editing, onClose, onSave, s
             name="code"
             label="Mã đơn vị (Code)"
             rules={[{ required: true, message: 'Nhập mã đơn vị' }]}
-            extra="Ví dụ: KG, G, LY, CAI, HOC_SINH... (sẽ tự động viết hoa)"
+            extra="Ví dụ: KG, G, LY, CAI... (sẽ tự động viết hoa)"
           >
-            <Input placeholder="KG" maxLength={20} style={{ textTransform: 'uppercase' }} />
+            <CodeInput placeholder="KG" prefix="U" entity="unit" maxLength={20}
+              style={{ textTransform: 'uppercase' }}
+              onGenerate={(c) => form.setFieldValue('code', c)} />
           </Form.Item>
         )}
         <Form.Item

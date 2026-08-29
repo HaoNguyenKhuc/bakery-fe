@@ -1,3 +1,4 @@
+import CodeInput from '../../components/CodeInput';
 import React, { useState } from 'react';
 import {
   Button, Col, Divider, Form, Input, InputNumber,
@@ -391,7 +392,10 @@ const ProductionGroups: React.FC = () => {
             <Row gutter={16}>
               <Col xs={24} md={6}>
                 <Form.Item name="code" label="Mã" rules={[{ required: true, message: 'Bắt buộc' }]}>
-                  <Input placeholder="VD: BANH_BAP" disabled={!!editingId} style={{ fontFamily: 'var(--pp-font-mono)' }} />
+                  <CodeInput placeholder="VD: PG001" prefix="PG" entity="prodGroup"
+                    disabled={!!editingId}
+                    style={{ fontFamily: 'var(--pp-font-mono)' }}
+                    onGenerate={(c) => form.setFieldValue('code', c)} />
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>

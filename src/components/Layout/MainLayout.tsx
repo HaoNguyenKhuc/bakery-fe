@@ -63,6 +63,7 @@ const breadcrumbNameMap: BreadcrumbMap = {
   '/prod-adjustments': 'Điều Chỉnh Sản Xuất',
   '/stock-summary': 'Tồn Kho',
   '/inventory-requests': 'Phiếu Kho',
+  '/low-stock': 'Hàng Cần Nhập',
   '/cancel-list': 'Danh Sách Hủy Bánh',
   '/reports': 'Báo Cáo',
   '/reports/daily': 'Báo Cáo Ngày (NV)',
@@ -123,6 +124,7 @@ const NAV_GROUPS: NavGroup[] = [
       { key: '/warehouse/kho-chinh', label: '🏠 Kho Chính', screenCode: 'STOCK_SUMMARY' },
       { key: '/warehouse/kho-bep',   label: '🔥 Kho Bếp',    screenCode: 'STOCK_SUMMARY' },
       { key: '/warehouse/cua-hang',  label: '🛍️ Cửa Hàng',   screenCode: 'STOCK_SUMMARY' },
+      { key: '/low-stock',           label: '⚠️ Hàng cần nhập', screenCode: 'STOCK_SUMMARY' },
     ],
   },
   {
@@ -176,6 +178,29 @@ const MainLayout: React.FC = () => {
 
   // Mobile Drawer state
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Low-stock badge count
+  const [lowStockCount, setLowStockCount] = useState<number>(0);
+  useEffect(() => {
+    const fetchLowStockCount = async () => {
+      try {
+        const apiBase = import.meta.env.VITE_API_BASE_URL || '';
+        const token = localStorage.getItem('token') || sessionStorage.getItem('token') || '';
+        const res = await fetch(`${apiBase}/api/v1/items/low-stock/count`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setLowStockCount(typeof data === 'number' ? data : (data?.count ?? 0));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    fetchLowStockCount();
+    const interval = setInterval(fetchLowStockCount, 60_000);
+    return () => clearInterval(interval);
+  }, []);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -395,7 +420,14 @@ const MainLayout: React.FC = () => {
                         }}
                         title={isCollapsedState ? item.label : undefined}
                       >
-                        <span className="sidebar-nav-item-text">{item.label}</span>
+                        {item.key === '/low-stock' && lowStockCount > 0 ? (
+                          <span className="sidebar-nav-item-text" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {item.label}
+                            <Badge count={lowStockCount} size="small" style={{ backgroundColor: '#ff4d4f' }} />
+                          </span>
+                        ) : (
+                          <span className="sidebar-nav-item-text">{item.label}</span>
+                        )}
                       </div>
                     );
                   })}

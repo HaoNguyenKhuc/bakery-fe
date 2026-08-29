@@ -315,6 +315,12 @@ export interface Item extends BaseEntity {
   recipe?: RecipeRequest | null;
   /** Danh sách quy cách đóng gói — chỉ có cho INGREDIENT, BE trả về trong getById */
   packagings?: ItemPackaging[];
+
+  // Stock threshold
+  minStockQuantity?: number | null;
+
+  // Image
+  imageUrl?: string | null;
 }
 
 export interface ItemRequest {
@@ -334,6 +340,7 @@ export interface ItemRequest {
 
   // Cost — nhập tay cho INGREDIENT; SEMI_PRODUCT tính tự động từ công thức
   unitCost?: number | null;
+  minStockQuantity?: number | null;
 
   // Shelf life — 0 = trong ngày
   shelfDays?: number | null;

@@ -1,11 +1,11 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Form, Select, Input, InputNumber, Row, Col, Card, Button,
   Space, message, Typography, Divider, Tag, Table, Popconfirm, Checkbox, Tooltip
 } from 'antd';
 import {
   PlusOutlined, ArrowLeftOutlined, SaveOutlined,
-  AppstoreOutlined, DeleteOutlined
+  AppstoreOutlined, DeleteOutlined, UploadOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -49,6 +49,12 @@ const ProductForm: React.FC = () => {
 
   // ── Recipe Yield State (SEMI_PRODUCT & PRODUCT) ─────────────────────────────
   const [yieldQuantity, setYieldQuantity] = useState<number | null>(null);
+
+  // ── Image State ──────────────────────────────────────────────────────────────
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const API_BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 
   // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -177,6 +183,7 @@ const ProductForm: React.FC = () => {
 
       const rawYield = editProduct.recipe?.yieldQuantity ?? editProduct.activeRecipe?.yieldQuantity ?? editProduct.recipeYieldQuantity ?? null;
       setYieldQuantity(rawYield != null ? Number(rawYield) : null);
+      setCurrentImageUrl(editProduct.imageUrl ?? null);
 
       form.setFieldsValue({
         code: editProduct.code,
@@ -190,6 +197,7 @@ const ProductForm: React.FC = () => {
         defaultSupplierId: defaultSupplierId || undefined,
         unitCost: editProduct.unitCost ?? editProduct.lastPrice ?? undefined,
         shelfDays: editProduct.shelfDays ?? undefined,
+        minStockQuantity: editProduct.minStockQuantity ?? undefined,
         recipe: recipe as any,
       });
     } else if (!isEdit) {
@@ -289,6 +297,7 @@ const ProductForm: React.FC = () => {
         ...values,
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
         shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
+        minStockQuantity: values.itemType !== 'PRODUCT' ? (values.minStockQuantity ?? null) : null,
         // Gửi recipe phẳng theo đúng chuẩn backend — KHÔNG gọi recipeService.create riêng
         recipeNote: values.recipe?.note ?? null,
         recipeYieldQuantity: finalYield,
@@ -545,6 +554,88 @@ const ProductForm: React.FC = () => {
           </Row>
 
 
+          {/* ── Hình ảnh sản phẩm ──────────────────────────────────────── */}
+          <Divider style={{ marginTop: 8, marginBottom: 16 }} />
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8, color: 'rgba(0,0,0,0.88)' }}>Hình ảnh</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {currentImageUrl && (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img
+                    src={`${API_BASE}${currentImageUrl}`}
+                    alt="product"
+                    style={{
+                      width: 96, height: 96, objectFit: 'cover',
+                      borderRadius: 8, border: '1px solid #d9d9d9',
+                    }}
+                  />
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    style={{
+                      position: 'absolute', top: -8, right: -8,
+                      borderRadius: '50%', width: 24, height: 24, padding: 0,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    loading={imageUploading}
+                    onClick={async () => {
+                      if (!id) return;
+                      setImageUploading(true);
+                      try {
+                        await itemService.deleteImage(id);
+                        setCurrentImageUrl(null);
+                        message.success('Đã xóa ảnh');
+                        queryClient.invalidateQueries({ queryKey: ['item', id] });
+                      } catch {
+                        // error handled by axiosClient
+                      } finally {
+                        setImageUploading(false);
+                      }
+                    }}
+                  />
+                </div>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file || !id) return;
+                  setImageUploading(true);
+                  try {
+                    const res = await itemService.uploadImage(id, file);
+                    const newUrl = (res as any)?.imageUrl ?? (res as any)?.data?.imageUrl ?? null;
+                    setCurrentImageUrl(newUrl);
+                    message.success('Đã tải ảnh lên thành công');
+                    queryClient.invalidateQueries({ queryKey: ['item', id] });
+                  } catch {
+                    // error handled by axiosClient
+                  } finally {
+                    setImageUploading(false);
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }
+                }}
+              />
+              <Button
+                icon={<UploadOutlined />}
+                loading={imageUploading}
+                disabled={!isEdit}
+                onClick={() => fileInputRef.current?.click()}
+                title={!isEdit ? 'Lưu sản phẩm trước khi tải ảnh' : undefined}
+              >
+                {currentImageUrl ? 'Đổi ảnh' : 'Tải ảnh lên'}
+              </Button>
+              {!isEdit && (
+                <Text type="secondary" style={{ fontSize: 12 }}>
+                  Tạo sản phẩm trước, sau đó quay lại để tải ảnh
+                </Text>
+              )}
+            </div>
+          </div>
+
           {/* Conditional fields for INGREDIENT */}
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
             {({ getFieldValue }) => {
@@ -596,6 +687,33 @@ const ProductForm: React.FC = () => {
                 </Row>
               ) : null
             }
+          </Form.Item>
+
+          {/* Ngưỡng cảnh báo tồn kho — INGREDIENT và SEMI_PRODUCT */}
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
+            {({ getFieldValue }) => {
+              const t = getFieldValue('itemType');
+              if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
+              return (
+                <Row gutter={24}>
+                  <Col xs={24} md={10}>
+                    <Form.Item
+                      name="minStockQuantity"
+                      label="Ngưỡng cảnh báo tồn kho"
+                      tooltip="Khi tồn thực tế < ngưỡng này → hệ thống cảnh báo cần nhập hàng. Để trống = không cảnh báo."
+                    >
+                      <InputNumber
+                        min={0}
+                        precision={3}
+                        style={{ width: '100%' }}
+                        placeholder="VD: 2 (chai), 10 (KG)..."
+                        addonAfter={getFieldValue('unit') || 'đvt'}
+                      />
+                    </Form.Item>
+                  </Col>
+                </Row>
+              );
+            }}
           </Form.Item>
 
           {/* Giá vốn — INGREDIENT và SEMI_PRODUCT */}

@@ -1,4 +1,4 @@
-import api from '../axiosClient';
+import api, { axiosClient } from '../axiosClient';
 import type {
   Item,
   ItemRequest,
@@ -75,6 +75,21 @@ const itemService = {
    */
   updatePackagings: (id: string, data: import('../../types').ItemPackagingRequest[]) =>
     api.put<import('../../types').ItemPackaging[]>(`/api/v1/items/${id}/packagings`, data),
+
+  // ── Image ─────────────────────────────────────────
+
+  /** POST /api/v1/items/{id}/image — Upload ảnh sản phẩm (multipart/form-data) */
+  uploadImage: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return axiosClient.post<any, any>(`/api/v1/items/${id}/image`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+
+  /** DELETE /api/v1/items/{id}/image — Xóa ảnh sản phẩm */
+  deleteImage: (id: string) =>
+    api.delete<any>(`/api/v1/items/${id}/image`),
 };
 
 export default itemService;

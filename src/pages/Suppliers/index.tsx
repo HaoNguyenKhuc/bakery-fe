@@ -1,3 +1,4 @@
+import CodeInput from '../../components/CodeInput';
 import React, { useEffect, useState } from 'react';
 import { Card, Table, Form, Input, Button, Tag, Space, Row, Col, message } from 'antd';
 import { PlusOutlined, EditOutlined, CheckOutlined, ClearOutlined } from '@ant-design/icons';
@@ -143,7 +144,8 @@ const SuppliersPage: React.FC = () => {
                     label="Mã"
                     rules={[{ required: true, message: 'Nhập code' }]}
                   >
-                    <Input placeholder="VD: NCC_01" />
+                    <CodeInput placeholder="VD: NCC001" prefix="NCC" entity="supplier"
+                      onGenerate={(c) => form.setFieldValue('code', c)} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>

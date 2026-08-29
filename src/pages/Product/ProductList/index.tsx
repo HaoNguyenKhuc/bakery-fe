@@ -7,7 +7,7 @@ import {
   PlusOutlined, SearchOutlined, EditOutlined,
   CheckOutlined, SyncOutlined, DollarOutlined,
   DeleteOutlined, FileExcelOutlined, CalculatorOutlined,
-  UndoOutlined,
+  UndoOutlined, PictureOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -89,6 +89,59 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
+const ProductImage: React.FC<{ src?: string | null; size?: number; alt?: string }> = ({ src, size = 64, alt = '' }) => {
+  const [imgError, setImgError] = React.useState(false);
+  const apiBase = import.meta.env.VITE_API_BASE_URL ?? '';
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
+  if (!src || imgError) {
+    return (
+      <div
+        style={{
+          width: size,
+          height: size,
+          borderRadius: 6,
+          background: '#f8fafc',
+          border: '1px dashed #cbd5e1',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          color: '#94a3b8',
+          gap: 2,
+        }}
+      >
+        <PictureOutlined style={{ fontSize: size > 40 ? 20 : 14, color: '#94a3b8' }} />
+        {size >= 60 && (
+          <span style={{ fontSize: 9, color: '#94a3b8', fontWeight: 500, lineHeight: 1 }}>
+            No image
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={`${apiBase}${src}`}
+      alt={alt}
+      onError={() => setImgError(true)}
+      style={{
+        width: size,
+        height: size,
+        objectFit: 'cover',
+        borderRadius: 6,
+        flexShrink: 0,
+        border: '1px solid #e2e8f0',
+      }}
+    />
+  );
+};
+
 // ─── Sorter Helpers ───────────────────────────────────────────────────────────
 
 const compareText = (a?: string | null, b?: string | null) => {
@@ -148,7 +201,6 @@ const ProductList: React.FC = () => {
   const [isExporting, setIsExporting] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecipeApplyAllResponse | null>(null);
   const [usageItem, setUsageItem] = useState<Item | null>(null);
-  const [onlyActive, setOnlyActive] = useState<boolean>(true);
 
   const debouncedSearch = useDebounce(search, 500);
 
@@ -172,7 +224,7 @@ const ProductList: React.FC = () => {
     isError: pagedError,
     refetch: refetchPaged,
   } = useQuery({
-    queryKey: ['items-paged', activeTab, debouncedSearch, page, statusFilter, onlyActive],
+    queryKey: ['items-paged', activeTab, debouncedSearch, page, statusFilter],
     queryFn: () => {
       if (isDeleted) {
         return itemService.getAllItems({
@@ -185,7 +237,6 @@ const ProductList: React.FC = () => {
       }
       return itemService.getAllItems({
         itemType: activeTab,
-        status: onlyActive ? 'ACTIVE' : undefined,
         q: debouncedSearch.trim() || undefined,
         approvalStatus: statusFilter ?? undefined,
         page,
@@ -480,17 +531,17 @@ const ProductList: React.FC = () => {
       title: 'Tên',
       dataIndex: 'name',
       key: 'name',
-      width: 180,
+      width: 220,
       sorter: (a, b) => compareText(a.name, b.name),
-      render: (v: string, record: Item) => (
-        <Text
-          ellipsis={{ tooltip: v }}
-          style={{ cursor: 'pointer', color: '#1d4ed8', maxWidth: 180 }}
-          onClick={() => navigate(`/products/edit/${record.id}`)}
-        >
-          {v}
-        </Text>
-      ),
+      render: (v: string, record: Item) => {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+               onClick={() => navigate(`/products/edit/${record.id}`)}>
+            <ProductImage src={record.imageUrl} size={64} alt={v} />
+            <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
+          </div>
+        );
+      },
     },
     {
       title: (
@@ -588,14 +639,6 @@ const ProductList: React.FC = () => {
       },
     },
     {
-      title: 'Trạng thái',
-      dataIndex: 'approvalStatus',
-      key: 'approvalStatus',
-      width: 110,
-      sorter: (a, b) => compareText(a.approvalStatus, b.approvalStatus),
-      render: (v: string) => <StatusBadge status={v} />,
-    },
-    {
       title: '',
       key: 'action',
       width: 140,
@@ -658,14 +701,15 @@ const ProductList: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => compareText(a.name, b.name),
-      render: (v: string, record: Item) => (
-        <Text
-          style={{ cursor: 'pointer', color: '#1d4ed8' }}
-          onClick={() => navigate(`/products/edit/${record.id}`)}
-        >
-          {v}
-        </Text>
-      ),
+      render: (v: string, record: Item) => {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+               onClick={() => navigate(`/products/edit/${record.id}`)}>
+            <ProductImage src={record.imageUrl} size={64} alt={v} />
+            <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 200, fontWeight: 500 }}>{v}</Text>
+          </div>
+        );
+      },
     },
     {
       title: 'Đơn vị',
@@ -729,14 +773,6 @@ const ProductList: React.FC = () => {
         );
       },
     }] : []),
-    {
-      title: 'Trạng thái',
-      dataIndex: 'approvalStatus',
-      key: 'approvalStatus',
-      width: 110,
-      sorter: (a, b) => compareText(a.approvalStatus, b.approvalStatus),
-      render: (v: string) => <StatusBadge status={v} />,
-    },
     {
       title: '',
       key: 'action',
@@ -820,7 +856,14 @@ const ProductList: React.FC = () => {
       dataIndex: 'name',
       key: 'name',
       sorter: (a, b) => compareText(a.name, b.name),
-      render: (v: string) => <Text style={{ color: '#475569', fontWeight: 500 }}>{v}</Text>,
+      render: (v: string, record: Item) => {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ProductImage src={record.imageUrl} size={36} alt={v} />
+            <Text style={{ color: '#475569', fontWeight: 500 }}>{v}</Text>
+          </div>
+        );
+      },
     },
     {
       title: 'Đơn vị',
@@ -841,14 +884,6 @@ const ProductList: React.FC = () => {
         const val = record.unitCost ?? record.lastPrice;
         return fmtPrice(val);
       },
-    },
-    {
-      title: 'Trạng thái cũ',
-      dataIndex: 'approvalStatus',
-      key: 'approvalStatus',
-      width: 110,
-      sorter: (a, b) => compareText(a.approvalStatus, b.approvalStatus),
-      render: (v: string) => <StatusBadge status={v} />,
     },
     {
       title: '',
@@ -1065,24 +1100,8 @@ const ProductList: React.FC = () => {
             )}
           </div>
 
-          {/* Right: Active toggle + Export & Delete buttons */}
+          {/* Right: Export & Delete buttons */}
           <Space>
-            {!isDeleted && (
-              <Button
-                size="small"
-                onClick={() => { setOnlyActive(v => !v); setPage(0); }}
-                style={{
-                  borderRadius: 14,
-                  fontWeight: 600,
-                  fontSize: 12,
-                  background: onlyActive ? '#dcfce7' : '#f1f5f9',
-                  color: onlyActive ? '#16a34a' : '#64748b',
-                  borderColor: onlyActive ? '#16a34a' : '#cbd5e1',
-                }}
-              >
-                {onlyActive ? '✓ Chỉ Active' : '☰ Tất cả trạng thái'}
-              </Button>
-            )}
             <Button
               icon={<FileExcelOutlined />}
               style={{ color: '#16a34a', borderColor: '#16a34a' }}

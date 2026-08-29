@@ -44,6 +44,9 @@ const AdminDailyReport = React.lazy(() => import('./pages/Reports/AdminDailyRepo
 // Cửa hàng
 const CancelList = React.lazy(() => import('./pages/CancelList'));
 
+// Kho - Cảnh báo tồn kho
+const LowStockPage = React.lazy(() => import('./pages/LowStock'));
+
 // Hệ thống
 const Users = React.lazy(() => import('./pages/System/Users'));
 const Roles = React.lazy(() => import('./pages/System/Roles'));
@@ -117,6 +120,7 @@ const App: React.FC = () => {
         <Route path="warehouse/:type" element={<Lazy><MainWarehouse /></Lazy>} />
         <Route path="stock-summary" element={<Navigate to="/warehouse/kho-chinh" replace />} />
         <Route path="inventory-requests" element={<Lazy><InventoryRequests /></Lazy>} />
+        <Route path="low-stock" element={<Lazy><LowStockPage /></Lazy>} />
 
         {/* ── Cửa hàng ── */}
         <Route path="cancel-list" element={<Lazy><CancelList /></Lazy>} />
