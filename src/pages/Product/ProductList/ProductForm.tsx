@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, ArrowLeftOutlined, SaveOutlined,
-  AppstoreOutlined, DeleteOutlined, UploadOutlined
+  AppstoreOutlined, DeleteOutlined, UploadOutlined, PictureOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -257,6 +257,7 @@ const ProductForm: React.FC = () => {
 
   // ── Recipe Calculations (Total KG & Cost) ──────────────────────────────────
   const watchedRecipeLines = Form.useWatch(['recipe', 'lines'], form) || [];
+  const watchedItemType = Form.useWatch('itemType', form) || 'PRODUCT';
 
   const { totalCost, totalKgCalc, totalKgHasGap } = useMemo(() => {
     let cost = 0;
@@ -295,6 +296,7 @@ const ProductForm: React.FC = () => {
 
       const payload = {
         ...values,
+        itemGroupId: values.itemType === 'PRODUCT' ? (values.itemGroupId ?? null) : null,
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
         shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
         minStockQuantity: values.itemType !== 'PRODUCT' ? (values.minStockQuantity ?? null) : null,
@@ -439,237 +441,247 @@ const ProductForm: React.FC = () => {
           loading={isEdit && loadingItem}
           style={{ marginBottom: 24 }}
         >
-          {/* Row 1: Loại + Item Group */}
-          <Row gutter={24}>
-            <Col xs={24} md={10}>
-              <Form.Item
-                name="itemType"
-                label="Loại"
-                rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
-              >
-                <Select
-                  placeholder="-- Chọn --"
-                  disabled={isEdit}
-                  onChange={(val) => form.setFieldsValue({ itemType: val })}
-                >
-                  <Select.Option value="INGREDIENT">🥕 Nguyên Liệu</Select.Option>
-                  <Select.Option value="SEMI_PRODUCT">🍞 Bán Thành Phẩm</Select.Option>
-                  <Select.Option value="PRODUCT">🎂 Sản Phẩm</Select.Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={14}>
-              <Form.Item name="itemGroupId" label="Nhóm mặt hàng">
-                <Select
-                  placeholder="-- Không có --"
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  options={itemGroups.map((g: any) => ({
-                    label: `[${g.code}] ${g.name}`,
-                    value: g.id,
-                  }))}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-
-          {/* Row 2: Tên (code ẩn — tự sinh khi tạo mới) */}
           {/* Hidden code field — vẫn submit lên backend, user không nhìn thấy */}
           <Form.Item name="code" style={{ display: 'none' }}>
             <Input />
           </Form.Item>
 
-          <Row gutter={24}>
-            <Col xs={24} md={24}>
-              <Form.Item
-                name="name"
-                label="Tên"
-                rules={[
-                  { required: true, message: 'Vui lòng nhập tên' },
-                  { max: 200, message: 'Tối đa 200 ký tự' },
-                ]}
-              >
-                <Input
-                  placeholder="VD: Bánh Mì Bơ Tỏi"
-                  onChange={(e) => {
-                    if (!isEdit) {
-                      // Auto-generate code từ tên sản phẩm khi tạo mới
-                      const raw = e.target.value;
-                      if (!raw.trim()) return;
-                      const normalized = raw
-                        .normalize('NFD')
-                        .replace(/[\u0300-\u036f]/g, '')
-                        .replace(/[đĐ]/g, 'd')
-                        .replace(/[^a-zA-Z0-9\s]/g, '')
-                        .trim();
-                      const initials = normalized
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .slice(0, 5)
-                        .map((w: string) => w[0].toUpperCase())
-                        .join('');
-                      // Suffix = timestamp base36 (4 chars) + 2 random digits → rất ít khả năng trùng
-                      const tsPart = Date.now().toString(36).slice(-4).toUpperCase();
-                      const randPart = Math.floor(10 + Math.random() * 90);
-                      form.setFieldValue('code', `${initials}${tsPart}${randPart}`);
+          {/* ── BỐ CỤC CHÍNH: ẢNH BÊN TRÁI + INPUTS BAO QUANH BÊN PHẢI ── */}
+          <Row gutter={[24, 16]}>
+            {/* Cột trái: Upload Hình ảnh */}
+            <Col xs={24} sm={8} md={6} lg={5}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+                {currentImageUrl ? (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img
+                      src={`${API_BASE}${currentImageUrl}`}
+                      alt="product"
+                      style={{
+                        width: 110,
+                        height: 110,
+                        objectFit: 'cover',
+                        borderRadius: 8,
+                        border: '1px solid #d9d9d9',
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      danger
+                      icon={<DeleteOutlined />}
+                      style={{
+                        position: 'absolute',
+                        top: -6,
+                        right: -6,
+                        borderRadius: '50%',
+                        width: 22,
+                        height: 22,
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      loading={imageUploading}
+                      onClick={async () => {
+                        if (!id) return;
+                        setImageUploading(true);
+                        try {
+                          await itemService.deleteImage(id);
+                          setCurrentImageUrl(null);
+                          message.success('Đã xóa ảnh');
+                          queryClient.invalidateQueries({ queryKey: ['item', id] });
+                        } catch {
+                          // error handled by axiosClient
+                        } finally {
+                          setImageUploading(false);
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      width: 110,
+                      height: 110,
+                      borderRadius: 8,
+                      border: '1px dashed #cbd5e1',
+                      background: '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#94a3b8',
+                      gap: 4,
+                    }}
+                  >
+                    <PictureOutlined style={{ fontSize: 28 }} />
+                    <span style={{ fontSize: 11 }}>No image</span>
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !id) return;
+                    setImageUploading(true);
+                    try {
+                      const res = await itemService.uploadImage(id, file);
+                      const newUrl = (res as any)?.imageUrl ?? (res as any)?.data?.imageUrl ?? null;
+                      setCurrentImageUrl(newUrl);
+                      message.success('Đã tải ảnh lên thành công');
+                      queryClient.invalidateQueries({ queryKey: ['item', id] });
+                    } catch {
+                      // error handled by axiosClient
+                    } finally {
+                      setImageUploading(false);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
                     }
                   }}
                 />
-              </Form.Item>
-            </Col>
-          </Row>
 
-          {/* Row 3: Đơn vị + Có thể xuất lẻ + Unit size — all bottom-aligned */}
-          <Row gutter={24} align="bottom">
-            <Col xs={24} md={8}>
-              <Form.Item
-                name="unit"
-                label="Đơn vị"
-                rules={[{ required: true, message: 'Vui lòng chọn đơn vị' }]}
-              >
-                <Select
-                  placeholder="-- Chọn đơn vị --"
-                  showSearch
-                  optionFilterProp="label"
-                  options={units.map((u: any) => ({
-                    label: u.name || u.code,
-                    value: u.code,
-                  }))}
-                />
-              </Form.Item>
+                <Button
+                  size="small"
+                  icon={<UploadOutlined />}
+                  loading={imageUploading}
+                  disabled={!isEdit}
+                  onClick={() => fileInputRef.current?.click()}
+                  title={!isEdit ? 'Lưu sản phẩm trước khi tải ảnh' : undefined}
+                >
+                  {currentImageUrl ? 'Đổi ảnh' : 'Tải ảnh lên'}
+                </Button>
+                {!isEdit && (
+                  <Text type="secondary" style={{ fontSize: 11, textAlign: 'center' }}>
+                    Lưu thông tin trước khi tải ảnh
+                  </Text>
+                )}
+              </div>
             </Col>
 
-            <Col xs={24} md={6}>
-              {/* Empty label spacer to align checkbox with inputs */}
-              <Form.Item
-                name="splittable"
-                valuePropName="checked"
-                label=" "
-                colon={false}
-              >
-                <Checkbox>Có thể xuất lẻ</Checkbox>
-              </Form.Item>
-            </Col>
-          </Row>
+            {/* Cột phải: Các trường thông tin bao quanh ảnh */}
+            <Col xs={24} sm={16} md={18} lg={19}>
+              <Row gutter={[16, 12]} align="bottom">
+                {/* 1. Loại */}
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item
+                    name="itemType"
+                    label="Loại"
+                    rules={[{ required: true, message: 'Vui lòng chọn loại' }]}
+                  >
+                    <Select
+                      placeholder="-- Chọn --"
+                      disabled={isEdit}
+                      onChange={(val) => {
+                        form.setFieldsValue({ itemType: val });
+                        if (val !== 'PRODUCT') {
+                          form.setFieldsValue({ itemGroupId: undefined });
+                        }
+                      }}
+                    >
+                      <Select.Option value="INGREDIENT">🥕 Nguyên Liệu</Select.Option>
+                      <Select.Option value="SEMI_PRODUCT">🍞 Bán Thành Phẩm</Select.Option>
+                      <Select.Option value="PRODUCT">🎂 Sản Phẩm</Select.Option>
+                    </Select>
+                  </Form.Item>
+                </Col>
 
+                {/* 2. Tên */}
+                <Col xs={24} sm={12} md={watchedItemType === 'PRODUCT' ? 10 : 12}>
+                  <Form.Item
+                    name="name"
+                    label="Tên"
+                    rules={[
+                      { required: true, message: 'Vui lòng nhập tên' },
+                      { max: 200, message: 'Tối đa 200 ký tự' },
+                    ]}
+                  >
+                    <Input
+                      placeholder="VD: Bánh Mì Bơ Tỏi"
+                      onChange={(e) => {
+                        if (!isEdit) {
+                          const raw = e.target.value;
+                          if (!raw.trim()) return;
+                          const normalized = raw
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .replace(/[đĐ]/g, 'd')
+                            .replace(/[^a-zA-Z0-9\s]/g, '')
+                            .trim();
+                          const initials = normalized
+                            .split(/\s+/)
+                            .filter(Boolean)
+                            .slice(0, 5)
+                            .map((w: string) => w[0].toUpperCase())
+                            .join('');
+                          const tsPart = Date.now().toString(36).slice(-4).toUpperCase();
+                          const randPart = Math.floor(10 + Math.random() * 90);
+                          form.setFieldValue('code', `${initials}${tsPart}${randPart}`);
+                        }
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
 
-          {/* ── Hình ảnh sản phẩm ──────────────────────────────────────── */}
-          <Divider style={{ marginTop: 8, marginBottom: 16 }} />
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontWeight: 500, marginBottom: 8, color: 'rgba(0,0,0,0.88)' }}>Hình ảnh</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {currentImageUrl && (
-                <div style={{ position: 'relative', display: 'inline-block' }}>
-                  <img
-                    src={`${API_BASE}${currentImageUrl}`}
-                    alt="product"
-                    style={{
-                      width: 96, height: 96, objectFit: 'cover',
-                      borderRadius: 8, border: '1px solid #d9d9d9',
-                    }}
-                  />
-                  <Button
-                    size="small"
-                    danger
-                    icon={<DeleteOutlined />}
-                    style={{
-                      position: 'absolute', top: -8, right: -8,
-                      borderRadius: '50%', width: 24, height: 24, padding: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                    loading={imageUploading}
-                    onClick={async () => {
-                      if (!id) return;
-                      setImageUploading(true);
-                      try {
-                        await itemService.deleteImage(id);
-                        setCurrentImageUrl(null);
-                        message.success('Đã xóa ảnh');
-                        queryClient.invalidateQueries({ queryKey: ['item', id] });
-                      } catch {
-                        // error handled by axiosClient
-                      } finally {
-                        setImageUploading(false);
-                      }
-                    }}
-                  />
-                </div>
-              )}
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file || !id) return;
-                  setImageUploading(true);
-                  try {
-                    const res = await itemService.uploadImage(id, file);
-                    const newUrl = (res as any)?.imageUrl ?? (res as any)?.data?.imageUrl ?? null;
-                    setCurrentImageUrl(newUrl);
-                    message.success('Đã tải ảnh lên thành công');
-                    queryClient.invalidateQueries({ queryKey: ['item', id] });
-                  } catch {
-                    // error handled by axiosClient
-                  } finally {
-                    setImageUploading(false);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }
-                }}
-              />
-              <Button
-                icon={<UploadOutlined />}
-                loading={imageUploading}
-                disabled={!isEdit}
-                onClick={() => fileInputRef.current?.click()}
-                title={!isEdit ? 'Lưu sản phẩm trước khi tải ảnh' : undefined}
-              >
-                {currentImageUrl ? 'Đổi ảnh' : 'Tải ảnh lên'}
-              </Button>
-              {!isEdit && (
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  Tạo sản phẩm trước, sau đó quay lại để tải ảnh
-                </Text>
-              )}
-            </div>
-          </div>
+                {/* 3. Đơn vị */}
+                <Col xs={24} sm={8} md={4}>
+                  <Form.Item
+                    name="unit"
+                    label="Đơn vị"
+                    rules={[{ required: true, message: 'Vui lòng chọn đơn vị' }]}
+                  >
+                    <Select
+                      placeholder="-- Đơn vị --"
+                      showSearch
+                      optionFilterProp="label"
+                      options={units.map((u: any) => ({
+                        label: u.name || u.code,
+                        value: u.code,
+                      }))}
+                    />
+                  </Form.Item>
+                </Col>
 
-          {/* Conditional fields for INGREDIENT */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
-            {({ getFieldValue }) => {
-              if (getFieldValue('itemType') !== 'INGREDIENT') return null;
-              return (
-                <>
-                  <Divider />
-                  <Row gutter={24}>
-                    <Col xs={24} md={12}>
-                      <Form.Item name="defaultSupplierId" label="Nhà Cung Cấp">
-                        <Select
-                          placeholder="-- Chọn nhà cung cấp --"
-                          allowClear
-                          showSearch
-                          optionFilterProp="label"
-                          options={suppliers.map((s: any) => ({
-                            label: `[${s.code}] ${s.name}`,
-                            value: s.id,
-                          }))}
-                        />
-                      </Form.Item>
-                    </Col>
-                  </Row>
-                </>
-              );
-            }}
-          </Form.Item>
+                {/* 4. Nhóm mặt hàng (Chỉ hiển thị khi là PRODUCT) */}
+                {watchedItemType === 'PRODUCT' && (
+                  <Col xs={24} sm={8} md={4}>
+                    <Form.Item name="itemGroupId" label="Nhóm mặt hàng">
+                      <Select
+                        placeholder="-- Không có --"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        options={itemGroups.map((g: any) => ({
+                          label: `[${g.code}] ${g.name}`,
+                          value: g.id,
+                        }))}
+                      />
+                    </Form.Item>
+                  </Col>
+                )}
 
-          {/* Hạn sử dụng (ngày) — chỉ hiện cho PRODUCT */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
-            {({ getFieldValue }) =>
-              getFieldValue('itemType') === 'PRODUCT' ? (
-                <Row gutter={24}>
-                  <Col xs={24} md={8}>
+                {/* 5. Nhà Cung Cấp (Chỉ hiển thị khi là INGREDIENT) */}
+                {watchedItemType === 'INGREDIENT' && (
+                  <Col xs={24} sm={16} md={10}>
+                    <Form.Item name="defaultSupplierId" label="Nhà Cung Cấp">
+                      <Select
+                        placeholder="-- Chọn nhà cung cấp --"
+                        allowClear
+                        showSearch
+                        optionFilterProp="label"
+                        options={suppliers.map((s: any) => ({
+                          label: `${s.name}`,
+                          value: s.id,
+                        }))}
+                      />
+                    </Form.Item>
+                  </Col>
+                )}
+
+                {/* 6. Hạn sử dụng (Chỉ hiển thị khi là PRODUCT) */}
+                {watchedItemType === 'PRODUCT' && (
+                  <Col xs={24} sm={12} md={6}>
                     <Form.Item
                       name="shelfDays"
                       label="Hạn sử dụng (ngày)"
@@ -684,57 +696,36 @@ const ProductForm: React.FC = () => {
                       />
                     </Form.Item>
                   </Col>
-                </Row>
-              ) : null
-            }
-          </Form.Item>
+                )}
 
-          {/* Ngưỡng cảnh báo tồn kho — INGREDIENT và SEMI_PRODUCT */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
-            {({ getFieldValue }) => {
-              const t = getFieldValue('itemType');
-              if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
-              return (
-                <Row gutter={24}>
-                  <Col xs={24} md={10}>
-                    <Form.Item
-                      name="minStockQuantity"
-                      label="Ngưỡng cảnh báo tồn kho"
-                      tooltip="Khi tồn thực tế < ngưỡng này → hệ thống cảnh báo cần nhập hàng. Để trống = không cảnh báo."
-                    >
-                      <InputNumber
-                        min={0}
-                        precision={3}
-                        style={{ width: '100%' }}
-                        placeholder="VD: 2 (chai), 10 (KG)..."
-                        addonAfter={getFieldValue('unit') || 'đvt'}
-                      />
-                    </Form.Item>
-                  </Col>
-                </Row>
-              );
-            }}
-          </Form.Item>
+                {/* 7. Có thể xuất lẻ (Dời sau Hạn sử dụng) */}
+                <Col xs={24} sm={8} md={4}>
+                  <Form.Item
+                    name="splittable"
+                    valuePropName="checked"
+                    label=" "
+                    colon={false}
+                  >
+                    <Checkbox>Có thể xuất lẻ</Checkbox>
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Col>
+          </Row>
 
-          {/* Giá vốn — INGREDIENT và SEMI_PRODUCT */}
-          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType}>
+          {/* ── 3. Giá vốn & Ngưỡng tồn kho (Xếp ngang nhau, thu gọn) ── */}
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.itemType !== cur.itemType || prev.unit !== cur.unit}>
             {({ getFieldValue }) => {
               const t = getFieldValue('itemType');
               if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
 
-              // ── INGREDIENT: Giá Nhập (editable) → tính Giá Lẻ (readonly) ──────
               if (t === 'INGREDIENT') {
-                // Đóng gói mặc định — lấy từ state packagings
                 const defaultPkg = packagings.find(p => p.isDefault) ?? packagings[0] ?? null;
                 const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
                 const hasPackaging = defaultPkg != null && defaultPkg.qtyPerPack > 0;
-
-                // Label đơn vị nhập (tên đóng gói mặc định hoặc fallback)
                 const importUnitLabel = hasPackaging
                   ? (defaultPkg!.name || 'đvị nhập')
                   : getFieldValue('unit') || 'đvị tính';
-
-                // Dòng quy đổi hiển thị bên dưới
                 const conversionLabel = hasPackaging
                   ? `1 ${defaultPkg!.name} = ${qty.toLocaleString('vi-VN')} ${getFieldValue('unit') || 'đvị tính'}`
                   : null;
@@ -743,12 +734,10 @@ const ProductForm: React.FC = () => {
                   v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
                 const numParse = (v: string | undefined) => v?.replace(/,/g, '') as any;
 
-                // Giá lẻ hiện tại tính từ giaNhapInput ÷ qty (để hiển thị readonly)
                 const giaLeDisplay = (giaNhapInput != null && giaNhapInput > 0)
                   ? Math.round(giaNhapInput / qty)
                   : null;
 
-                // Khi user thay đổi Giá nhập → tính Giá lẻ → set unitCost
                 const onChangeGiaNhap = (val: number | null) => {
                   setGiaNhapInput(val);
                   const giaLe = (val != null && val > 0) ? Math.round(val / qty) : null;
@@ -757,14 +746,15 @@ const ProductForm: React.FC = () => {
 
                 return (
                   <>
+                    <Divider style={{ margin: '16px 0' }} />
                     {conversionLabel && (
                       <div style={{ marginBottom: 8, fontSize: 12, color: '#64748b' }}>
                         💱 Quy đổi đóng gói mặc định: <strong>{conversionLabel}</strong>
                       </div>
                     )}
-                    <Row gutter={24}>
-                      {/* Giá nhập — user nhập tay */}
-                      <Col xs={24} md={12}>
+                    <Row gutter={[16, 16]}>
+                      {/* 1. Giá nhập */}
+                      <Col xs={24} sm={12} md={8}>
                         <Form.Item
                           label={
                             <span>
@@ -793,8 +783,8 @@ const ProductForm: React.FC = () => {
                         </Form.Item>
                       </Col>
 
-                      {/* Giá lẻ — readonly, tính từ Giá nhập ÷ qty, lưu vào unitCost */}
-                      <Col xs={24} md={12}>
+                      {/* 2. Giá lẻ */}
+                      <Col xs={24} sm={12} md={8}>
                         <Form.Item
                           name="unitCost"
                           label={
@@ -802,7 +792,6 @@ const ProductForm: React.FC = () => {
                               Giá lẻ&nbsp;
                               <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
                                 (đ / {getFieldValue('unit') || 'đvị tính'})
-                                {hasPackaging && ` = Giá nhập ÷ ${qty.toLocaleString('vi-VN')}`}
                               </span>
                             </span>
                           }
@@ -820,17 +809,33 @@ const ProductForm: React.FC = () => {
                           />
                         </Form.Item>
                       </Col>
+
+                      {/* 3. Ngưỡng tồn kho (Dời sau Giá lẻ) */}
+                      <Col xs={24} sm={12} md={8}>
+                        <Form.Item
+                          name="minStockQuantity"
+                          label="Ngưỡng cảnh báo tồn kho"
+                          tooltip="Khi tồn thực tế < ngưỡng này → hệ thống cảnh báo cần nhập hàng. Để trống = không cảnh báo."
+                        >
+                          <InputNumber
+                            min={0}
+                            precision={3}
+                            style={{ width: '100%' }}
+                            placeholder="VD: 10..."
+                            addonAfter={getFieldValue('unit') || 'đvt'}
+                          />
+                        </Form.Item>
+                      </Col>
                     </Row>
                   </>
                 );
               }
 
-              // ── SEMI_PRODUCT: Giá vốn = Tổng thành tiền dự tính (disabled, auto từ recipe) ────
+              // SEMI_PRODUCT
               const numFmtSemi = (v: number | string | undefined) =>
                 v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
               const numParseSemi = (v: string | undefined) => v?.replace(/,/g, '') as any;
 
-              // Sync unitCost với totalCost mỗi lần totalCost thay đổi
               if (totalCost > 0) {
                 const current = form.getFieldValue('unitCost');
                 if (current !== Math.round(totalCost)) {
@@ -839,43 +844,65 @@ const ProductForm: React.FC = () => {
               }
 
               return (
-                <Row gutter={24}>
-                  <Col xs={24} md={12}>
-                    <Form.Item
-                      name="unitCost"
-                      label={
-                        <span>
-                          Giá vốn&nbsp;
-                          <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
-                            (đ/đvt — tự tính từ công thức)
+                <>
+                  <Divider style={{ margin: '16px 0' }} />
+                  <Row gutter={[16, 16]}>
+                    {/* 1. Giá vốn */}
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item
+                        name="unitCost"
+                        label={
+                          <span>
+                            Giá vốn&nbsp;
+                            <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
+                              (đ/đvt — tự tính từ CT)
+                            </span>
                           </span>
-                        </span>
-                      }
-                      tooltip="Tự động lấy từ Tổng thành tiền dự tính của công thức. Không thể nhập tay."
-                    >
-                      <InputNumber
-                        disabled
-                        min={0}
-                        style={{
-                          width: '100%',
-                          background: '#e0f2fe',
-                          color: '#0c4a6e',
-                          fontWeight: 600,
-                        }}
-                        placeholder={totalCost > 0 ? '' : '— Chưa có công thức —'}
-                        formatter={numFmtSemi}
-                        parser={numParseSemi}
-                      />
-                    </Form.Item>
-                  </Col>
-                  {totalCost > 0 && (
-                    <Col xs={24} md={12} style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: 24 }}>
-                      <span style={{ fontSize: 12, color: '#0369a1' }}>
-                        💡 Tổng thành tiền dự tính: <strong>{Math.round(totalCost).toLocaleString('vi-VN')} đ</strong>
-                      </span>
+                        }
+                        tooltip="Tự động lấy từ Tổng thành tiền dự tính của công thức. Không thể nhập tay."
+                      >
+                        <InputNumber
+                          disabled
+                          min={0}
+                          style={{
+                            width: '100%',
+                            background: '#e0f2fe',
+                            color: '#0c4a6e',
+                            fontWeight: 600,
+                          }}
+                          placeholder={totalCost > 0 ? '' : '— Chưa có công thức —'}
+                          formatter={numFmtSemi}
+                          parser={numParseSemi}
+                        />
+                      </Form.Item>
                     </Col>
-                  )}
-                </Row>
+
+                    {/* 2. Ngưỡng tồn kho (Dời sau Giá vốn) */}
+                    <Col xs={24} sm={12} md={8}>
+                      <Form.Item
+                        name="minStockQuantity"
+                        label="Ngưỡng cảnh báo tồn kho"
+                        tooltip="Khi tồn thực tế < ngưỡng này → hệ thống cảnh báo cần nhập hàng. Để trống = không cảnh báo."
+                      >
+                        <InputNumber
+                          min={0}
+                          precision={3}
+                          style={{ width: '100%' }}
+                          placeholder="VD: 10..."
+                          addonAfter={getFieldValue('unit') || 'đvt'}
+                        />
+                      </Form.Item>
+                    </Col>
+
+                    {totalCost > 0 && (
+                      <Col xs={24} sm={24} md={8} style={{ display: 'flex', alignItems: 'center', paddingTop: 8 }}>
+                        <span style={{ fontSize: 12, color: '#0369a1' }}>
+                          💡 Tổng thành tiền dự tính: <strong>{Math.round(totalCost).toLocaleString('vi-VN')} đ</strong>
+                        </span>
+                      </Col>
+                    )}
+                  </Row>
+                </>
               );
             }}
           </Form.Item>
@@ -1029,93 +1056,93 @@ const ProductForm: React.FC = () => {
               >
                 {/* ⚖ Khối lượng mẻ (KG) — chỉ hiện cho SEMI_PRODUCT */}
                 {t === 'SEMI_PRODUCT' && (
-                <div style={{
-                  padding: '12px 16px',
-                  background: '#f0f9ff',
-                  border: '1px solid #bae6fd',
-                  borderRadius: 8,
-                  marginBottom: 16,
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
-                    <div style={{ fontSize: 13, color: '#0369a1', fontWeight: 600 }}>
-                      ⚖ Khối lượng mẻ (KG)
-                    </div>
-                    {totalCost > 0 && (
-                      <div style={{ fontSize: 13 }}>
-                        <span style={{ color: '#64748b', marginRight: 6 }}>Tổng thành tiền dự tính:</span>
-                        <strong style={{ color: '#b45309', fontSize: 15 }}>
-                          {Math.round(totalCost).toLocaleString('vi-VN')} đ
-                        </strong>
+                  <div style={{
+                    padding: '12px 16px',
+                    background: '#f0f9ff',
+                    border: '1px solid #bae6fd',
+                    borderRadius: 8,
+                    marginBottom: 16,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 10 }}>
+                      <div style={{ fontSize: 13, color: '#0369a1', fontWeight: 600 }}>
+                        ⚖ Khối lượng mẻ (KG)
                       </div>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-                    {/* Tự tính */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Tự tính:</span>
-                      <Input
-                        readOnly
-                        value={totalKgCalc > 0 ? `${totalKgCalc.toFixed(3)}${totalKgHasGap ? ' ⚠' : ''}` : '—'}
-                        suffix="KG"
-                        style={{
-                          width: 120,
-                          fontWeight: 700,
-                          color: '#0c4a6e',
-                          background: '#e0f2fe',
-                          cursor: 'default',
-                        }}
-                        title="Tổng KG nguyên liệu trong công thức — tự động tính"
-                      />
-                    </div>
-
-                    {/* Thực tế */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Thực tế:</span>
-                      <InputNumber
-                        min={0.001}
-                        step={0.001}
-                        placeholder="Nhập..."
-                        value={yieldQuantity}
-                        onChange={(val) => setYieldQuantity(val)}
-                        addonAfter="KG"
-                        style={{ width: 145, fontWeight: 600 }}
-                        title="Khối lượng thực tế sản phẩm BTP thu được sau khi sản xuất. Dùng để tính đơn giá/KG và so sánh hao hụt."
-                      />
-                      {yieldQuantity != null && (
-                        <Button
-                          size="small"
-                          type="link"
-                          onClick={() => setYieldQuantity(null)}
-                          style={{ padding: '0 4px', fontSize: 12 }}
-                        >
-                          Reset
-                        </Button>
+                      {totalCost > 0 && (
+                        <div style={{ fontSize: 13 }}>
+                          <span style={{ color: '#64748b', marginRight: 6 }}>Tổng thành tiền dự tính:</span>
+                          <strong style={{ color: '#b45309', fontSize: 15 }}>
+                            {Math.round(totalCost).toLocaleString('vi-VN')} đ
+                          </strong>
+                        </div>
                       )}
                     </div>
 
-                    {/* Hao hụt */}
-                    <div>
-                      {totalKgCalc > 0 && yieldQuantity != null ? (
-                        (() => {
-                          const diff = totalKgCalc - yieldQuantity;
-                          const pct = ((diff / totalKgCalc) * 100).toFixed(1);
-                          if (Math.abs(diff) < 0.0001) {
-                            return <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 13 }}>✓ Không hao hụt</span>;
-                          }
-                          return (
-                            <span style={{ fontSize: 13, color: diff > 0 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
-                              {diff > 0 ? 'Hao hụt: +' : 'Dư ra: '}
-                              {diff.toFixed(3)} KG ({diff > 0 ? '+' : ''}{pct}%)
-                            </span>
-                          );
-                        })()
-                      ) : totalKgCalc > 0 ? (
-                        <span style={{ fontSize: 12, color: '#94a3b8' }}>← Nhập thực tế để so sánh hao hụt</span>
-                      ) : null}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+                      {/* Tự tính */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Tự tính:</span>
+                        <Input
+                          readOnly
+                          value={totalKgCalc > 0 ? `${totalKgCalc.toFixed(3)}${totalKgHasGap ? ' ⚠' : ''}` : '—'}
+                          suffix="KG"
+                          style={{
+                            width: 120,
+                            fontWeight: 700,
+                            color: '#0c4a6e',
+                            background: '#e0f2fe',
+                            cursor: 'default',
+                          }}
+                          title="Tổng KG nguyên liệu trong công thức — tự động tính"
+                        />
+                      </div>
+
+                      {/* Thực tế */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Thực tế:</span>
+                        <InputNumber
+                          min={0.001}
+                          step={0.001}
+                          placeholder="Nhập..."
+                          value={yieldQuantity}
+                          onChange={(val) => setYieldQuantity(val)}
+                          addonAfter="KG"
+                          style={{ width: 145, fontWeight: 600 }}
+                          title="Khối lượng thực tế sản phẩm BTP thu được sau khi sản xuất. Dùng để tính đơn giá/KG và so sánh hao hụt."
+                        />
+                        {yieldQuantity != null && (
+                          <Button
+                            size="small"
+                            type="link"
+                            onClick={() => setYieldQuantity(null)}
+                            style={{ padding: '0 4px', fontSize: 12 }}
+                          >
+                            Reset
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Hao hụt */}
+                      <div>
+                        {totalKgCalc > 0 && yieldQuantity != null ? (
+                          (() => {
+                            const diff = totalKgCalc - yieldQuantity;
+                            const pct = ((diff / totalKgCalc) * 100).toFixed(1);
+                            if (Math.abs(diff) < 0.0001) {
+                              return <span style={{ color: '#16a34a', fontWeight: 600, fontSize: 13 }}>✓ Không hao hụt</span>;
+                            }
+                            return (
+                              <span style={{ fontSize: 13, color: diff > 0 ? '#dc2626' : '#16a34a', fontWeight: 600 }}>
+                                {diff > 0 ? 'Hao hụt: +' : 'Dư ra: '}
+                                {diff.toFixed(3)} KG ({diff > 0 ? '+' : ''}{pct}%)
+                              </span>
+                            );
+                          })()
+                        ) : totalKgCalc > 0 ? (
+                          <span style={{ fontSize: 12, color: '#94a3b8' }}>← Nhập thực tế để so sánh hao hụt</span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
-                </div>
                 )}
 
                 <Form.List name={['recipe', 'lines']}>
