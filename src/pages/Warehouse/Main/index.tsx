@@ -3,9 +3,13 @@ import { Tabs, Typography, Divider, Empty } from 'antd';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useWarehouseStore } from '../../../store';
 import WarehouseSummaryTab from '../components/WarehouseSummaryTab';
+import LowStockTab from '../components/LowStockTab';
 import InventoryRequests from '../InventoryRequests';
 import StoreDailyReport from '../StoreDailyReport';
 import KitchenDelivery from '../../Production/KitchenDelivery';
+import { Badge } from 'antd';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../../api/axiosClient';
 
 const { Title, Text } = Typography;
 
@@ -13,6 +17,19 @@ const MainWarehouse: React.FC = () => {
   const { type = 'kho-chinh' } = useParams<{ type: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get('tab') || 'ton-kho';
+
+  const { data: lowStockCount = 0 } = useQuery<number>({
+    queryKey: ['low-stock-count-badge'],
+    queryFn: async () => {
+      try {
+        const res = (await api.get('/api/v1/items/low-stock')) as any[];
+        return Array.isArray(res) ? res.length : 0;
+      } catch {
+        return 0;
+      }
+    },
+    staleTime: 30_000,
+  });
 
   const getKhoTong = useWarehouseStore((s) => s.getKhoTong);
   const getKhoBep = useWarehouseStore((s) => s.getKhoBep);
@@ -29,6 +46,19 @@ const MainWarehouse: React.FC = () => {
   let headerDesc = 'Quản lý kiểm kê, nhập xuất và phiếu kho cho khu vực Kho Chính';
   let tabItems: any[] = [];
 
+  const lowStockTabLabel = (
+    <span>
+      ⚠️ Hàng Cần Nhập
+      {lowStockCount > 0 && (
+        <Badge
+          count={lowStockCount}
+          overflowCount={99}
+          style={{ backgroundColor: '#dc2626', marginLeft: 6 }}
+        />
+      )}
+    </span>
+  );
+
   if (type === 'kho-bep') {
     headerTitle = '🔥 Kho Bếp (KITCHEN)';
     headerDesc = 'Quản lý tồn kho, kiểm kê nguyên liệu và phiếu kho cho khu vực Bếp';
@@ -37,6 +67,11 @@ const MainWarehouse: React.FC = () => {
         key: 'ton-kho',
         label: '📦 Tồn Kho',
         children: activeKitchen ? <WarehouseSummaryTab warehouse={activeKitchen} /> : <Empty description="Chưa có kho bếp nào" />,
+      },
+      {
+        key: 'hang-can-nhap',
+        label: lowStockTabLabel,
+        children: <LowStockTab warehouse={activeKitchen} />,
       },
       {
         key: 'phieu-kho',
@@ -80,6 +115,11 @@ const MainWarehouse: React.FC = () => {
         key: 'ton-kho',
         label: '📦 Tồn Kho',
         children: <WarehouseSummaryTab warehouse={khoTong} />,
+      },
+      {
+        key: 'hang-can-nhap',
+        label: lowStockTabLabel,
+        children: <LowStockTab warehouse={khoTong} />,
       },
       {
         key: 'phieu-kho',

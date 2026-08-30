@@ -653,7 +653,7 @@ const ProductForm: React.FC = () => {
                         showSearch
                         optionFilterProp="label"
                         options={itemGroups.map((g: any) => ({
-                          label: `[${g.code}] ${g.name}`,
+                          label: g.name || g.code,
                           value: g.id,
                         }))}
                       />
