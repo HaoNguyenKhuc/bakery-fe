@@ -1224,14 +1224,14 @@ const ProductForm: React.FC = () => {
                               <Select.OptGroup label="Nguyên Liệu">
                                 {ingredients.map((i: any) => (
                                   <Select.Option key={i.id} value={i.id}>
-                                    {`[${i.code}] ${i.name}`}
+                                    {`${i.name}`}
                                   </Select.Option>
                                 ))}
                               </Select.OptGroup>
                               <Select.OptGroup label="Bán Thành Phẩm">
                                 {semiProducts.map((i: any) => (
                                   <Select.Option key={i.id} value={i.id}>
-                                    {`[${i.code}] ${i.name}`}
+                                    {`${i.name}`}
                                   </Select.Option>
                                 ))}
                               </Select.OptGroup>

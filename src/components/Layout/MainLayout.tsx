@@ -48,6 +48,7 @@ interface BreadcrumbMap {
 
 const breadcrumbNameMap: BreadcrumbMap = {
   '/': 'Tổng Quan',
+  '/dashboard': 'Bảng Điều Khiển',
   '/products': 'Danh Sách Sản Phẩm',
   '/products/create': 'Tạo Sản Phẩm',
   '/suppliers': 'Nhà Cung Cấp',
@@ -82,7 +83,7 @@ type MenuItem = Required<MenuProps>['items'][number];
 interface NavItem {
   key: string;           // route path
   label: string;
-  screenCode: string | null; // null = chỉ SUPER_ADMIN mới thấy
+  screenCode: string | null; // null = chỉ SUPER_ADMIN mới thấy, 'PUBLIC' = tất cả đều thấy
 }
 
 interface NavGroup {
@@ -91,6 +92,12 @@ interface NavGroup {
 }
 
 const NAV_GROUPS: NavGroup[] = [
+  {
+    label: 'Tổng Quan',
+    items: [
+      { key: '/dashboard', label: '📊 Bảng điều khiển', screenCode: 'PUBLIC' },
+    ],
+  },
   {
     label: 'Master Data',
     items: [
@@ -348,6 +355,7 @@ const MainLayout: React.FC = () => {
     const isSuper = isSuperAdminFn();
     return NAV_GROUPS.map((group) => {
       const visibleItems = group.items.filter((item) => {
+        if (item.screenCode === 'PUBLIC') return true;
         if (item.screenCode === null) return isSuper;
         return canViewScreen(item.screenCode);
       });
@@ -361,7 +369,7 @@ const MainLayout: React.FC = () => {
       <div
         className={`sidebar-logo ${isCollapsedState ? 'collapsed' : ''}`}
         onClick={() => {
-          navigate('/products');
+          navigate('/dashboard');
           if (isMobile) setDrawerOpen(false);
         }}
       >

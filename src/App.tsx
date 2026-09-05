@@ -87,8 +87,8 @@ const App: React.FC = () => {
           </RequireAuth>
         }
       >
-        {/* Default route -> redirect to products */}
-        <Route index element={<Navigate to="/products" replace />} />
+        {/* Default route -> redirect to dashboard */}
+        <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Lazy><Dashboard /></Lazy>} />
 
         {/* ── Master Data ── */}

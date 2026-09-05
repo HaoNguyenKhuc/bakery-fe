@@ -118,8 +118,8 @@ const Login: React.FC = () => {
   const [devMode, setDevMode] = useState(false);
   const [selectedDev, setSelectedDev] = useState<DevAccount>(DEV_ACCOUNTS[0]);
 
-  // Redirect back to the page user tried to visit, or products
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/products';
+  // Redirect back to the page user tried to visit, or dashboard
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/dashboard';
 
   // ── Real API login ─────────────────────────────────────────────────────────
 
