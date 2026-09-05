@@ -33,6 +33,7 @@ export interface LowStockItem {
   unit: string;
   itemType: 'INGREDIENT' | 'SEMI_FINISHED' | 'PRODUCT';
   minStockQuantity: number;
+  restockQuantity?: number;
   currentStock: number;
   shortage: number;
   unitCost?: number;
@@ -137,6 +138,7 @@ export const LowStockTab: React.FC<Props> = ({ warehouse }) => {
         itemType: row.itemType || fullItem.itemType || 'INGREDIENT',
         currentStock: row.currentStock ?? 0,
         minStockQuantity: row.minStockQuantity ?? 0,
+        restockQuantity: row.restockQuantity ?? fullItem.restockQuantity ?? undefined,
         shortage: row.shortage ?? (row.minStockQuantity || 0) - (row.currentStock || 0),
         unitCost: fullItem.unitCost ?? row.unitCost,
         supplierId: supplierObj?.id ?? defSup?.id,
@@ -207,10 +209,32 @@ export const LowStockTab: React.FC<Props> = ({ warehouse }) => {
 
   const handleCreateOrderForSupplier = (group: (typeof supplierGroups)[0]) => {
     message.info(`Chuyển đến form tạo phiếu nhập cho ${group.supplierName}`);
+    const lines = group.items.map((it) => {
+      const qty =
+        it.restockQuantity && it.restockQuantity > 0
+          ? Math.max(1, +(it.restockQuantity - (it.currentStock ?? 0)))
+          : Math.max(1, +(it.shortage > 0 ? it.shortage : (it.minStockQuantity || 1)));
+      return {
+        itemId: it.itemId,
+        quantity: qty,
+        unit: it.unit,
+        unitCost: it.unitCost ?? undefined,
+        note: `Tồn kho: ${it.currentStock ?? 0} ${it.unit} | Thiếu: ${it.shortage ?? 0} ${it.unit}`,
+      };
+    });
+
     navigate(
       `/warehouse/${type}/phieu-kho/create?requestType=PURCHASE${
         group.supplierId ? `&supplierId=${group.supplierId}` : ''
-      }`
+      }`,
+      {
+        state: {
+          requestType: 'PURCHASE',
+          supplierId: group.supplierId,
+          note: `Nhập hàng từ cảnh báo tồn kho — NCC: ${group.supplierName}`,
+          lines,
+        },
+      }
     );
   };
 
@@ -218,7 +242,27 @@ export const LowStockTab: React.FC<Props> = ({ warehouse }) => {
     message.success(
       `Đã chuẩn bị thông tin tạo phiếu cho ${supplierGroups.length} nhà cung cấp!`
     );
-    navigate(`/warehouse/${type}/phieu-kho/create?requestType=PURCHASE`);
+    const lines = mergedItems.map((it) => {
+      const qty =
+        it.restockQuantity && it.restockQuantity > 0
+          ? Math.max(1, +(it.restockQuantity - (it.currentStock ?? 0)))
+          : Math.max(1, +(it.shortage > 0 ? it.shortage : (it.minStockQuantity || 1)));
+      return {
+        itemId: it.itemId,
+        quantity: qty,
+        unit: it.unit,
+        unitCost: it.unitCost ?? undefined,
+        note: `NCC: ${it.supplierName || 'Chưa gán'} | Tồn: ${it.currentStock ?? 0} | Thiếu: ${it.shortage ?? 0}`,
+      };
+    });
+
+    navigate(`/warehouse/${type}/phieu-kho/create?requestType=PURCHASE&fromLowStock=all`, {
+      state: {
+        requestType: 'PURCHASE',
+        note: `Nhập tất cả hàng từ cảnh báo tồn kho (${mergedItems.length} mặt hàng)`,
+        lines,
+      },
+    });
   };
 
   return (

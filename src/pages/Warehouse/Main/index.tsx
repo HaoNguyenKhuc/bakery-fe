@@ -16,7 +16,7 @@ const { Title, Text } = Typography;
 const MainWarehouse: React.FC = () => {
   const { type = 'kho-chinh' } = useParams<{ type: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'ton-kho';
+  const activeTab = searchParams.get('tab') || 'hang-can-nhap' || 'ton-kho';
 
   const { data: lowStockCount = 0 } = useQuery<number>({
     queryKey: ['low-stock-count-badge'],
@@ -64,14 +64,14 @@ const MainWarehouse: React.FC = () => {
     headerDesc = 'Quản lý tồn kho, kiểm kê nguyên liệu và phiếu kho cho khu vực Bếp';
     tabItems = [
       {
-        key: 'ton-kho',
-        label: '📦 Tồn Kho',
-        children: activeKitchen ? <WarehouseSummaryTab warehouse={activeKitchen} /> : <Empty description="Chưa có kho bếp nào" />,
-      },
-      {
         key: 'hang-can-nhap',
         label: lowStockTabLabel,
         children: <LowStockTab warehouse={activeKitchen} />,
+      },
+      {
+        key: 'ton-kho',
+        label: '📦 Tồn Kho',
+        children: activeKitchen ? <WarehouseSummaryTab warehouse={activeKitchen} /> : <Empty description="Chưa có kho bếp nào" />,
       },
       {
         key: 'phieu-kho',
@@ -112,14 +112,14 @@ const MainWarehouse: React.FC = () => {
     headerDesc = 'Quản lý kiểm kê, nhập xuất và tồn kho cho khu vực Kho Chính';
     tabItems = [
       {
-        key: 'ton-kho',
-        label: '📦 Tồn Kho',
-        children: <WarehouseSummaryTab warehouse={khoTong} />,
-      },
-      {
         key: 'hang-can-nhap',
         label: lowStockTabLabel,
         children: <LowStockTab warehouse={khoTong} />,
+      },
+      {
+        key: 'ton-kho',
+        label: '📦 Tồn Kho',
+        children: <WarehouseSummaryTab warehouse={khoTong} />,
       },
       {
         key: 'phieu-kho',
@@ -130,7 +130,7 @@ const MainWarehouse: React.FC = () => {
   }
 
   const validKeys = tabItems.map((i) => i.key);
-  const currentTab = validKeys.includes(activeTab) ? activeTab : 'ton-kho';
+  const currentTab = validKeys.includes(activeTab) ? activeTab : 'hang-can-nhap';
 
   return (
     <div>

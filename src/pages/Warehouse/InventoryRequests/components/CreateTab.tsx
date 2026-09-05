@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Form, Select, DatePicker, Input, Button, Card, Row, Col, Space, InputNumber, Divider, Tooltip, message } from 'antd';
 import { ArrowLeftOutlined, ImportOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams, useLocation } from 'react-router-dom';
 import dayjs from 'dayjs';
+import api from '../../../../api/axiosClient';
 import { masterService, itemService, transactionService, inventoryService, warehouseService } from '../../../../api/services';
 
 interface RequestLine {
@@ -22,14 +24,98 @@ interface CreateTabProps {
 const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCancel }) => {
   const [form] = Form.useForm();
   const queryClient = useQueryClient();
-  const [lines, setLines] = useState<RequestLine[]>([{ quantity: 1 }]);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const prefillState = location.state as {
+    requestType?: string;
+    supplierId?: string;
+    note?: string;
+    lines?: RequestLine[];
+  } | undefined;
+
+  const urlRequestType = searchParams.get('requestType') || prefillState?.requestType || 'PURCHASE';
+  const urlSupplierId = searchParams.get('supplierId') || prefillState?.supplierId || undefined;
+  const urlNote = prefillState?.note;
+  const fromLowStockParam = searchParams.get('fromLowStock');
+
+  const [lines, setLines] = useState<RequestLine[]>(() => {
+    if (prefillState?.lines && prefillState.lines.length > 0) {
+      return prefillState.lines;
+    }
+    return [{ quantity: 1 }];
+  });
   const requestType = Form.useWatch('requestType', form);
 
+  const hasStateLines = !!(prefillState?.lines && prefillState.lines.length > 0);
+
+  // Fallback query khi truy cập URL trực tiếp hoặc F5 reload mà không có location.state
+  const { data: autoLowStockLines } = useQuery({
+    queryKey: ['low-stock-lines-fallback', urlSupplierId, fromLowStockParam],
+    queryFn: async () => {
+      if (hasStateLines || (!urlSupplierId && !fromLowStockParam)) return [];
+      try {
+        const [lowStockRes, itemsRes] = await Promise.all([
+          api.get<any[]>('/api/v1/items/low-stock'),
+          itemService.getAllItems({ size: 2000 }).catch(() => null),
+        ]);
+        const lowStock = Array.isArray(lowStockRes) ? lowStockRes : [];
+        const allItemsList = Array.isArray(itemsRes) ? itemsRes : itemsRes?.content || [];
+        const itemMap = new Map<string, any>(allItemsList.map((it: any) => [it.id, it]));
+
+        const filtered = lowStock.filter((it: any) => {
+          if (!urlSupplierId) return true; // all suppliers
+          const full: any = itemMap.get(it.itemId);
+          const sId = full?.defaultSupplierId || full?.defaultSupplier?.id || full?.defaultSupplier?.key;
+          return sId === urlSupplierId;
+        });
+
+        return filtered.map((it: any) => {
+          const full: any = itemMap.get(it.itemId);
+          const qty =
+            it.restockQuantity && it.restockQuantity > 0
+              ? Math.max(1, +(it.restockQuantity - (it.currentStock ?? 0)))
+              : Math.max(1, +(it.shortage > 0 ? it.shortage : (it.minStockQuantity || 1)));
+          return {
+            itemId: it.itemId,
+            quantity: qty,
+            unit: it.unit || full?.unit || '',
+            unitCost: full?.unitCost ?? it.unitCost ?? undefined,
+            note: `Tồn kho: ${it.currentStock ?? 0} ${it.unit || ''} | Thiếu: ${it.shortage ?? 0} ${it.unit || ''}`,
+          };
+        });
+      } catch {
+        return [];
+      }
+    },
+    enabled: !hasStateLines && (!!urlSupplierId || !!fromLowStockParam),
+    staleTime: 30000,
+  });
+
   useEffect(() => {
-    if (warehouseFilter?.id) {
-      form.setFieldsValue({ targetWarehouseId: warehouseFilter.id });
+    if (prefillState?.lines && prefillState.lines.length > 0) {
+      setLines(prefillState.lines);
+    } else if (autoLowStockLines && autoLowStockLines.length > 0) {
+      setLines(autoLowStockLines);
     }
-  }, [warehouseFilter?.id, form]);
+  }, [prefillState?.lines, autoLowStockLines]);
+
+  useEffect(() => {
+    const fieldsToSet: any = {};
+    if (warehouseFilter?.id) {
+      fieldsToSet.targetWarehouseId = warehouseFilter.id;
+    }
+    if (urlRequestType) {
+      fieldsToSet.requestType = urlRequestType;
+    }
+    if (urlSupplierId) {
+      fieldsToSet.supplierId = urlSupplierId;
+    }
+    if (urlNote) {
+      fieldsToSet.note = urlNote;
+    }
+    form.setFieldsValue(fieldsToSet);
+  }, [warehouseFilter?.id, urlRequestType, urlSupplierId, urlNote, form]);
 
   // Queries for lookups
   const { data: ingredientsData, isLoading: loadingIngredients } = useQuery({
@@ -121,7 +207,13 @@ const CreateTab: React.FC<CreateTabProps> = ({ warehouseFilter, onSuccess, onCan
         form={form}
         layout="vertical"
         onFinish={onFinish}
-        initialValues={{ requestType: 'PURCHASE', requestDate: dayjs(), targetWarehouseId: warehouseFilter?.id }}
+        initialValues={{
+          requestType: urlRequestType,
+          requestDate: dayjs(),
+          targetWarehouseId: warehouseFilter?.id,
+          supplierId: urlSupplierId,
+          note: urlNote,
+        }}
       >
         <Row gutter={16}>
           <Col xs={24} md={12}>

@@ -94,27 +94,27 @@ const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Master Data',
     items: [
-      { key: '/products',        label: '📋 Sản phẩm',      screenCode: 'ITEMS' },
-      { key: '/suppliers',       label: '🏭 Nhà cung cấp',  screenCode: 'SUPPLIERS' },
+      { key: '/products', label: '📋 Sản phẩm', screenCode: 'ITEMS' },
+      { key: '/suppliers', label: '🏭 Nhà cung cấp', screenCode: 'SUPPLIERS' },
       { key: '/product-mapping', label: '🔗 Product Mapping', screenCode: 'PRODUCT_MAPPING' },
-      { key: '/item-groups',     label: '🏠 Item Groups',   screenCode: 'ITEM_GROUPS' },
-      { key: '/units',           label: '📐 Đơn vị tính',  screenCode: 'UNITS' },
+      { key: '/item-groups', label: '🏠 Item Groups', screenCode: 'ITEM_GROUPS' },
+      { key: '/units', label: '📐 Đơn vị tính', screenCode: 'UNITS' },
     ],
   },
   {
     label: 'Kế hoạch SX',
     items: [
-      { key: '/sx-config',        label: '📋 Cấu hình SX',    screenCode: 'SX_CONFIG' },
-      { key: '/prod-groups',      label: '🔧 Prod Groups',     screenCode: 'PROD_GROUPS' },
-      { key: '/threshold-rules',  label: '📏 Threshold Rules', screenCode: 'THRESHOLD_RULES' },
-      { key: '/prod-plans',       label: '📅 Kế hoạch ngày',  screenCode: 'PROD_PLANS' },
+      { key: '/sx-config', label: '📋 Cấu hình SX', screenCode: 'SX_CONFIG' },
+      { key: '/prod-groups', label: '🔧 Prod Groups', screenCode: 'PROD_GROUPS' },
+      { key: '/threshold-rules', label: '📏 Threshold Rules', screenCode: 'THRESHOLD_RULES' },
+      { key: '/prod-plans', label: '📅 Kế hoạch ngày', screenCode: 'PROD_PLANS' },
     ],
   },
   {
     label: 'Sản xuất',
     items: [
-      { key: '/prod-requests',   label: '📝 Phiếu SX',       screenCode: 'PROD_REQUESTS' },
-      { key: '/delivery',        label: '🚚 Giao nhận',       screenCode: 'DELIVERY_RECORDS' },
+      { key: '/prod-requests', label: '📝 Phiếu SX', screenCode: 'PROD_REQUESTS' },
+      { key: '/delivery', label: '🚚 Giao nhận', screenCode: 'DELIVERY_RECORDS' },
       { key: '/prod-adjustments', label: '⚠️ Điều chỉnh SX', screenCode: 'PROD_ADJUSTMENTS' },
     ],
   },
@@ -122,9 +122,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Kho',
     items: [
       { key: '/warehouse/kho-chinh', label: '🏠 Kho Chính', screenCode: 'STOCK_SUMMARY' },
-      { key: '/warehouse/kho-bep',   label: '🔥 Kho Bếp',    screenCode: 'STOCK_SUMMARY' },
-      { key: '/warehouse/cua-hang',  label: '🛍️ Cửa Hàng',   screenCode: 'STOCK_SUMMARY' },
-      { key: '/low-stock',           label: '⚠️ Hàng cần nhập', screenCode: 'STOCK_SUMMARY' },
+      { key: '/warehouse/kho-bep', label: '🔥 Kho Bếp', screenCode: 'STOCK_SUMMARY' },
+      { key: '/warehouse/cua-hang', label: '🛍️ Cửa Hàng', screenCode: 'STOCK_SUMMARY' },
     ],
   },
   {
@@ -137,15 +136,15 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Báo cáo',
     items: [
       { key: '/reports/daily', label: '📋 BC Ngày (NV)', screenCode: 'DAILY_REPORT' },
-      { key: '/reports/admin', label: '📊 BC Admin',     screenCode: 'DAILY_REPORT' },
-      { key: '/reports',      label: '📁 BC Tổng hợp',  screenCode: 'DAILY_REPORT' },
+      { key: '/reports/admin', label: '📊 BC Admin', screenCode: 'DAILY_REPORT' },
+      { key: '/reports', label: '📁 BC Tổng hợp', screenCode: 'DAILY_REPORT' },
     ],
   },
   {
     label: 'Hệ thống',
     items: [
-      { key: '/users',        label: '👤 Tài khoản',          screenCode: 'USERS' },
-      { key: '/roles',        label: '🔐 Phân quyền',         screenCode: 'ROLES' },
+      { key: '/users', label: '👤 Tài khoản', screenCode: 'USERS' },
+      { key: '/roles', label: '🔐 Phân quyền', screenCode: 'ROLES' },
       { key: '/activity-log', label: '📜 Nhật ký hoạt động', screenCode: null }, // chỉ SUPER_ADMIN
     ],
   },
@@ -215,7 +214,7 @@ const MainLayout: React.FC = () => {
   // Re-fetch permission map if needed (e.g. after page refresh)
   useEffect(() => {
     if (isAuthenticated && roleId && roleCode && roleCode.toUpperCase() !== 'SUPER_ADMIN' && permissionMap === null) {
-      roleService.getPermissions(roleId).then(setPermissionMap).catch(() => {});
+      roleService.getPermissions(roleId).then(setPermissionMap).catch(() => { });
     }
   }, [isAuthenticated, roleId, roleCode, permissionMap, setPermissionMap]);
 

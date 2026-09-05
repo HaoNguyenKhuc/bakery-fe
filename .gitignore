@@ -27,3 +27,4 @@ swagger.json
 swagger-utf8.json
 .hallmark
 ts_errors.txt
+*.zip

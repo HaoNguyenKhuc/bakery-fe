@@ -79,6 +79,13 @@ const ProductForm: React.FC = () => {
   });
   const units = extractArray(unitsData);
 
+  // Helper: lấy tên hiển thị của đơn vị (value/name thay vì code)
+  const getBaseUnitName = (unitCode: string | undefined): string => {
+    if (!unitCode) return 'đvt';
+    const matched = units.find((u: any) => u.code === unitCode || u.id === unitCode);
+    return matched?.name || matched?.value || unitCode;
+  };
+
   const { data: conversionsRaw = [] } = useQuery({
     queryKey: ['unit-conversions'],
     queryFn: () => unitService.getConversions(),
@@ -198,6 +205,7 @@ const ProductForm: React.FC = () => {
         unitCost: editProduct.unitCost ?? editProduct.lastPrice ?? undefined,
         shelfDays: editProduct.shelfDays ?? undefined,
         minStockQuantity: editProduct.minStockQuantity ?? undefined,
+        restockQuantity: editProduct.restockQuantity ?? undefined,
         recipe: recipe as any,
       });
     } else if (!isEdit) {
@@ -300,6 +308,7 @@ const ProductForm: React.FC = () => {
         unitSize: values.splittable ? (values.unitSize ?? null) : null,
         shelfDays: values.itemType === 'PRODUCT' ? (values.shelfDays ?? null) : null,
         minStockQuantity: values.itemType !== 'PRODUCT' ? (values.minStockQuantity ?? null) : null,
+        restockQuantity: values.itemType !== 'PRODUCT' ? (values.restockQuantity ?? null) : null,
         // Gửi recipe phẳng theo đúng chuẩn backend — KHÔNG gọi recipeService.create riêng
         recipeNote: values.recipe?.note ?? null,
         recipeYieldQuantity: finalYield,
@@ -720,15 +729,21 @@ const ProductForm: React.FC = () => {
               if (t !== 'INGREDIENT' && t !== 'SEMI_PRODUCT') return null;
 
               if (t === 'INGREDIENT') {
-                const defaultPkg = packagings.find(p => p.isDefault) ?? packagings[0] ?? null;
+                const defaultPkg = packagings.find(p => p.isDefault) ?? null;
                 const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
                 const hasPackaging = defaultPkg != null && defaultPkg.qtyPerPack > 0;
+                const baseUnitName = getBaseUnitName(getFieldValue('unit'));
                 const importUnitLabel = hasPackaging
                   ? (defaultPkg!.name || 'đvị nhập')
-                  : getFieldValue('unit') || 'đvị tính';
+                  : baseUnitName;
                 const conversionLabel = hasPackaging
-                  ? `1 ${defaultPkg!.name} = ${qty.toLocaleString('vi-VN')} ${getFieldValue('unit') || 'đvị tính'}`
+                  ? `1 ${defaultPkg!.name} = ${qty.toLocaleString('vi-VN')} ${baseUnitName}`
                   : null;
+
+                // Nếu table Đóng Gói có item default: lấy tên đóng gói default; Chưa có: lấy tên hiển thị của đơn vị (value thay vì code)
+                const stockUnitLabel = (defaultPkg && defaultPkg.name?.trim())
+                  ? defaultPkg.name.trim()
+                  : baseUnitName;
 
                 const numFmt = (v: number | string | undefined) =>
                   v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
@@ -754,7 +769,7 @@ const ProductForm: React.FC = () => {
                     )}
                     <Row gutter={[16, 16]}>
                       {/* 1. Giá nhập */}
-                      <Col xs={24} sm={12} md={8}>
+                      <Col xs={24} sm={12} md={6}>
                         <Form.Item
                           label={
                             <span>
@@ -784,14 +799,14 @@ const ProductForm: React.FC = () => {
                       </Col>
 
                       {/* 2. Giá lẻ */}
-                      <Col xs={24} sm={12} md={8}>
+                      <Col xs={24} sm={12} md={6}>
                         <Form.Item
                           name="unitCost"
                           label={
                             <span>
                               Giá lẻ&nbsp;
                               <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 12 }}>
-                                (đ / {getFieldValue('unit') || 'đvị tính'})
+                                (đ / {baseUnitName})
                               </span>
                             </span>
                           }
@@ -811,7 +826,7 @@ const ProductForm: React.FC = () => {
                       </Col>
 
                       {/* 3. Ngưỡng tồn kho (Dời sau Giá lẻ) */}
-                      <Col xs={24} sm={12} md={8}>
+                      <Col xs={24} sm={12} md={6}>
                         <Form.Item
                           name="minStockQuantity"
                           label="Ngưỡng cảnh báo tồn kho"
@@ -822,7 +837,24 @@ const ProductForm: React.FC = () => {
                             precision={3}
                             style={{ width: '100%' }}
                             placeholder="VD: 10..."
-                            addonAfter={getFieldValue('unit') || 'đvt'}
+                            addonAfter={stockUnitLabel}
+                          />
+                        </Form.Item>
+                      </Col>
+
+                      {/* 4. Mức nhập (Mới thêm sau Ngưỡng cảnh báo) */}
+                      <Col xs={24} sm={12} md={6}>
+                        <Form.Item
+                          name="restockQuantity"
+                          label="Mức nhập"
+                          tooltip="Mức tồn mục tiêu khi nhập thêm hàng. Khi tồn thực tế < ngưỡng cảnh báo, hệ thống đề xuất nhập đủ lên mức này."
+                        >
+                          <InputNumber
+                            min={0}
+                            precision={3}
+                            style={{ width: '100%' }}
+                            placeholder="VD: 20..."
+                            addonAfter={stockUnitLabel}
                           />
                         </Form.Item>
                       </Col>
@@ -848,7 +880,7 @@ const ProductForm: React.FC = () => {
                   <Divider style={{ margin: '16px 0' }} />
                   <Row gutter={[16, 16]}>
                     {/* 1. Giá vốn */}
-                    <Col xs={24} sm={12} md={8}>
+                    <Col xs={24} sm={12} md={6}>
                       <Form.Item
                         name="unitCost"
                         label={
@@ -878,7 +910,7 @@ const ProductForm: React.FC = () => {
                     </Col>
 
                     {/* 2. Ngưỡng tồn kho (Dời sau Giá vốn) */}
-                    <Col xs={24} sm={12} md={8}>
+                    <Col xs={24} sm={12} md={6}>
                       <Form.Item
                         name="minStockQuantity"
                         label="Ngưỡng cảnh báo tồn kho"
@@ -889,13 +921,30 @@ const ProductForm: React.FC = () => {
                           precision={3}
                           style={{ width: '100%' }}
                           placeholder="VD: 10..."
-                          addonAfter={getFieldValue('unit') || 'đvt'}
+                          addonAfter={getBaseUnitName(getFieldValue('unit'))}
+                        />
+                      </Form.Item>
+                    </Col>
+
+                    {/* 3. Mức nhập (Mới thêm sau Ngưỡng cảnh báo) */}
+                    <Col xs={24} sm={12} md={6}>
+                      <Form.Item
+                        name="restockQuantity"
+                        label="Mức nhập"
+                        tooltip="Mức tồn mục tiêu khi nhập/sản xuất thêm. Khi tồn thực tế < ngưỡng cảnh báo, hệ thống đề xuất đặt đủ lên mức này."
+                      >
+                        <InputNumber
+                          min={0}
+                          precision={3}
+                          style={{ width: '100%' }}
+                          placeholder="VD: 20..."
+                          addonAfter={getBaseUnitName(getFieldValue('unit'))}
                         />
                       </Form.Item>
                     </Col>
 
                     {totalCost > 0 && (
-                      <Col xs={24} sm={24} md={8} style={{ display: 'flex', alignItems: 'center', paddingTop: 8 }}>
+                      <Col xs={24} sm={24} md={6} style={{ display: 'flex', alignItems: 'center', paddingTop: 8 }}>
                         <span style={{ fontSize: 12, color: '#0369a1' }}>
                           💡 Tổng thành tiền dự tính: <strong>{Math.round(totalCost).toLocaleString('vi-VN')} đ</strong>
                         </span>
@@ -915,7 +964,7 @@ const ProductForm: React.FC = () => {
           >
             {({ getFieldValue }) => {
               if (getFieldValue('itemType') !== 'INGREDIENT') return null;
-              const currentUnit = getFieldValue('unit') || '?';
+              const currentUnit = getBaseUnitName(getFieldValue('unit'));
 
               const thSt: React.CSSProperties = {
                 padding: '6px 8px',

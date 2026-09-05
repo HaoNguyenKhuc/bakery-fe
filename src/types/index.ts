@@ -318,6 +318,7 @@ export interface Item extends BaseEntity {
 
   // Stock threshold
   minStockQuantity?: number | null;
+  restockQuantity?: number | null;
 
   // Image
   imageUrl?: string | null;
@@ -341,6 +342,7 @@ export interface ItemRequest {
   // Cost — nhập tay cho INGREDIENT; SEMI_PRODUCT tính tự động từ công thức
   unitCost?: number | null;
   minStockQuantity?: number | null;
+  restockQuantity?: number | null;
 
   // Shelf life — 0 = trong ngày
   shelfDays?: number | null;
