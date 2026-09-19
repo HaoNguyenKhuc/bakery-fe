@@ -239,6 +239,7 @@ const ProductList: React.FC = () => {
         itemType: activeTab,
         q: debouncedSearch.trim() || undefined,
         approvalStatus: statusFilter ?? undefined,
+        status: 'ACTIVE',
         page,
         size: PAGE_SIZE,
       });
@@ -380,6 +381,12 @@ const ProductList: React.FC = () => {
           setSelectedRows([]);
           queryClient.invalidateQueries({ queryKey: ['items-paged'] });
           queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
+          // Gọi refetch trực tiếp để buộc load data mới, tránh bị cache cũ stale
+          if (isGroupFiltered) {
+            refetchAllType();
+          } else {
+            refetchPaged();
+          }
         } catch (err: any) {
           message.error(err?.message || 'Lỗi khi thực hiện xóa hàng loạt.');
         } finally {
