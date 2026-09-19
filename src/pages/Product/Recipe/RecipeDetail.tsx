@@ -303,7 +303,8 @@ const RecipeDetail: React.FC = () => {
       render: (_, line) => (
         <InputNumber
           min={0}
-          step={0.1}
+          step={0.0001}
+          precision={4}
           style={{ width: '100%' }}
           value={line.quantity}
           onChange={(val) => handleUpdateLine(line.rowKey, 'quantity', val || 0)}

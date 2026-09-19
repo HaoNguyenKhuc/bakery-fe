@@ -181,6 +181,25 @@ const fmtPrice = (val: number | string | null | undefined): string => {
   return roundPrice(Number(val)).toLocaleString('vi-VN') + ' đ';
 };
 
+/**
+ * Định dạng giá chính xác (dùng cho Giá nhập, Giá lẻ): không làm tròn bội số 1000đ,
+ * chỉ làm tròn sau 4 chữ số thập phân sau dấu chấm.
+ * Ví dụ: 0.005 -> "0,005 đ", 12500.5 -> "12.500,5 đ", 15000 -> "15.000 đ"
+ */
+const fmtExactPrice = (val: number | string | null | undefined): string => {
+  if (val == null || val === '') return '—';
+  const num = Number(val);
+  if (isNaN(num)) return '—';
+  const rounded = Math.round(num * 10000) / 10000;
+  return (
+    rounded.toLocaleString('vi-VN', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 4,
+    }) + ' đ'
+  );
+};
+const fmtRetailPrice = fmtExactPrice;
+
 // ─── Main Component ────────────────────────────────────────────────────────────
 
 const ProductList: React.FC = () => {
@@ -197,6 +216,7 @@ const ProductList: React.FC = () => {
   const [costModalItem, setCostModalItem] = useState<Item | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [selectedRows, setSelectedRows] = useState<Item[]>([]);
+  const [isBulkApproving, setIsBulkApproving] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [recalcResult, setRecalcResult] = useState<RecipeApplyAllResponse | null>(null);
@@ -295,6 +315,7 @@ const ProductList: React.FC = () => {
   const isIngredient = activeTab === 'INGREDIENT';
   const showGroupColumn = activeTab === 'PRODUCT' && activeGroupCode === null;
   const showRecipeColumn = activeTab === 'PRODUCT' || activeTab === 'SEMI_PRODUCT';
+  const isPendingFilter = statusFilter === 'PENDING_APPROVAL' || statusFilter === 'PENDING';
 
   // ── Mutations ──────────────────────────────────────────────────────────────
 
@@ -351,6 +372,85 @@ const ProductList: React.FC = () => {
       okText: 'Approve',
       cancelText: 'Hủy',
       onOk: () => approveMut.mutate(item.id),
+    });
+  };
+
+  const handleBulkApprove = () => {
+    if (selectedRows.length === 0 && selectedRowKeys.length === 0) return;
+
+    // Lọc các item có trạng thái cần duyệt (DRAFT, PENDING_APPROVAL, PENDING)
+    const approvableRows = selectedRows.filter((r) =>
+      ['DRAFT', 'PENDING_APPROVAL', 'PENDING'].includes(r.approvalStatus)
+    );
+
+    if (approvableRows.length === 0) {
+      message.info('Tất cả sản phẩm đã chọn đều đã được phê duyệt trước đó!');
+      return;
+    }
+
+    const codeList = approvableRows.map((r) => r.code).filter(Boolean);
+    const codeSummary =
+      codeList.length <= 5
+        ? codeList.join(', ')
+        : `${codeList.slice(0, 5).join(', ')}... (+${codeList.length - 5} mã khác)`;
+
+    const totalSelected = selectedRowKeys.length || selectedRows.length;
+    const skippedCount = totalSelected - approvableRows.length;
+
+    Modal.confirm({
+      title: 'Xác nhận phê duyệt hàng loạt',
+      icon: <CheckOutlined style={{ color: '#16a34a' }} />,
+      content: (
+        <div>
+          <p>
+            Bạn có chắc chắn muốn phê duyệt <strong>{approvableRows.length}</strong> sản phẩm đã chọn?
+          </p>
+          <p style={{ color: '#64748b', fontSize: 13, margin: '4px 0 0' }}>
+            Mã: {codeSummary}
+          </p>
+          {skippedCount > 0 && (
+            <p style={{ color: '#d97706', fontSize: 12, margin: '6px 0 0' }}>
+              * Bỏ qua {skippedCount} sản phẩm đã được phê duyệt trước đó.
+            </p>
+          )}
+        </div>
+      ),
+      okText: `Duyệt (${approvableRows.length})`,
+      okButtonProps: { style: { background: '#16a34a', borderColor: '#16a34a' } },
+      cancelText: 'Hủy',
+      onOk: async () => {
+        setIsBulkApproving(true);
+        try {
+          const ids = approvableRows.map((item) => item.id);
+          const res = await itemService.bulkApprove(ids);
+
+          if (res.fulfilled > 0) {
+            message.success(
+              `Đã phê duyệt thành công ${res.fulfilled}/${res.total} sản phẩm!`
+            );
+          }
+          if (res.rejected > 0) {
+            message.warning(
+              `Có ${res.rejected} sản phẩm phê duyệt thất bại.`
+            );
+          }
+
+          setSelectedRowKeys([]);
+          setSelectedRows([]);
+          queryClient.invalidateQueries({ queryKey: ['items-paged'] });
+          queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
+
+          if (isGroupFiltered) {
+            refetchAllType();
+          } else {
+            refetchPaged();
+          }
+        } catch (err: any) {
+          message.error(err?.message || 'Lỗi khi thực hiện phê duyệt hàng loạt.');
+        } finally {
+          setIsBulkApproving(false);
+        }
+      },
     });
   };
 
@@ -419,6 +519,7 @@ const ProductList: React.FC = () => {
           : 'Chưa có';
         const cost = item.unitCost ?? (item as any).lastPrice ?? '';
         const costRounded = cost !== '' ? roundPrice(Number(cost)) : '';
+        const costExact = cost !== '' ? Math.round(Number(cost) * 10000) / 10000 : '';
 
         if (activeTab === 'PRODUCT') {
           return {
@@ -447,13 +548,19 @@ const ProductList: React.FC = () => {
             || (item.defaultSupplier as any)?.value
             || item.defaultSupplier
             || '';
+          const pkg = defPkg(item);
+          const giaNhapExact = (pkg && cost !== '')
+            ? Math.round(Number(cost) * Number(pkg.qtyPerPack) * 10000) / 10000
+            : '';
           return {
             'STT': index + 1,
             'Mã': item.code,
             'Tên nguyên liệu': item.name,
             'Nhà cung cấp': supplierName,
-            'Đơn vị': item.unit,
-            'Giá vốn / Giá nhập (VNĐ)': costRounded,
+            'Đơn vị tính': item.unit,
+            'Đơn vị nhập': pkg?.name || '',
+            'Giá nhập (VNĐ)': giaNhapExact,
+            'Giá lẻ (VNĐ)': costExact,
             'Trạng thái': item.approvalStatus,
           };
         } else {
@@ -463,7 +570,7 @@ const ProductList: React.FC = () => {
             'Mã': item.code,
             'Tên': item.name,
             'Đơn vị': item.unit,
-            'Giá vốn / Giá lẻ (VNĐ)': costRounded,
+            'Giá vốn / Giá lẻ (VNĐ)': item.itemType === 'INGREDIENT' ? costExact : costRounded,
             'Trạng thái': item.status,
           };
         }
@@ -619,7 +726,7 @@ const ProductList: React.FC = () => {
         const giaNhap = Number(cost) * Number(pkg.qtyPerPack);
         return (
           <Text style={{ fontWeight: 500, color: '#0f172a' }}>
-            {fmtPrice(giaNhap)}
+            {fmtExactPrice(giaNhap)}
           </Text>
         );
       },
@@ -640,7 +747,7 @@ const ProductList: React.FC = () => {
         if (cost == null) return <Text type="secondary">—</Text>;
         return (
           <Text style={{ fontWeight: 500, color: '#0f172a' }}>
-            {fmtPrice(cost)}
+            {fmtRetailPrice(cost)}
           </Text>
         );
       },
@@ -889,7 +996,7 @@ const ProductList: React.FC = () => {
       sorter: (a, b) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
       render: (_: unknown, record: Item) => {
         const val = record.unitCost ?? record.lastPrice;
-        return fmtPrice(val);
+        return record.itemType === 'INGREDIENT' ? fmtRetailPrice(val) : fmtPrice(val);
       },
     },
     {
@@ -1073,7 +1180,12 @@ const ProductList: React.FC = () => {
                   return (
                     <span
                       key={key}
-                      onClick={() => { setStatusFilter(active ? null : key); setPage(0); }}
+                      onClick={() => {
+                        setStatusFilter(active ? null : key);
+                        setPage(0);
+                        setSelectedRowKeys([]);
+                        setSelectedRows([]);
+                      }}
                       style={{
                         padding: '3px 12px',
                         borderRadius: 12,
@@ -1093,7 +1205,12 @@ const ProductList: React.FC = () => {
                 })}
                 {statusFilter && (
                   <span
-                    onClick={() => { setStatusFilter(null); setPage(0); }}
+                    onClick={() => {
+                      setStatusFilter(null);
+                      setPage(0);
+                      setSelectedRowKeys([]);
+                      setSelectedRows([]);
+                    }}
                     style={{
                       padding: '3px 10px', borderRadius: 12, fontSize: 12,
                       cursor: 'pointer', color: '#64748b', background: '#f1f5f9',
@@ -1118,16 +1235,30 @@ const ProductList: React.FC = () => {
               Xuất Excel
             </Button>
             {!isDeleted && (
-              <Button
-                danger
-                type="primary"
-                icon={<DeleteOutlined />}
-                disabled={selectedRowKeys.length === 0}
-                loading={isBulkDeleting}
-                onClick={handleBulkDelete}
-              >
-                Xóa {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
-              </Button>
+              <>
+                {isPendingFilter && (
+                  <Button
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                    disabled={selectedRowKeys.length === 0}
+                    loading={isBulkApproving}
+                    onClick={handleBulkApprove}
+                  >
+                    Duyệt {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
+                  </Button>
+                )}
+                <Button
+                  danger
+                  type="primary"
+                  icon={<DeleteOutlined />}
+                  disabled={selectedRowKeys.length === 0}
+                  loading={isBulkDeleting}
+                  onClick={handleBulkDelete}
+                >
+                  Xóa {selectedRowKeys.length > 0 ? `(${selectedRowKeys.length})` : ''}
+                </Button>
+              </>
             )}
           </Space>
         </div>

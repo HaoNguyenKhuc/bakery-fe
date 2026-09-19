@@ -63,6 +63,16 @@ const itemService = {
   approve: (id: string) =>
     api.post<Item>(`/api/v1/items/${id}/approve`),
 
+  /** Approve multiple items in parallel using Promise.allSettled */
+  bulkApprove: async (ids: string[]) => {
+    const results = await Promise.allSettled(
+      ids.map((id) => itemService.approve(id))
+    );
+    const fulfilled = results.filter((r) => r.status === 'fulfilled').length;
+    const rejected = results.filter((r) => r.status === 'rejected').length;
+    return { fulfilled, rejected, total: ids.length };
+  },
+
   /** POST /items/{id}/reject */
   reject: (id: string, reason: string) =>
     api.post<Item>(`/api/v1/items/${id}/reject`, { reason }),

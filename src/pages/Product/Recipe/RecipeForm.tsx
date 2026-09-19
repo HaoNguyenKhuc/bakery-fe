@@ -141,6 +141,8 @@ const RecipeForm: React.FC = () => {
         <InputNumber
           size="small"
           min={0}
+          step={0.0001}
+          precision={4}
           value={v}
           style={{ width: '100%' }}
           onChange={(val) => updateLine(record.rowKey, { quantity: val ?? 0 })}

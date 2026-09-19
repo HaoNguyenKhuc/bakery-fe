@@ -133,16 +133,31 @@ const ProductForm: React.FC = () => {
     if (isEdit && itemData) {
       const editProduct: any = itemData;
 
-      // Tìm itemGroupId: nếu API trả về object itemGroup { key, name }, khớp key với itemGroups để lấy ID
+      // Tìm itemGroupId: nếu API trả về object itemGroup { key, name, value, id } hoặc string ID, khớp với itemGroups để lấy ID
       let itemGroupId = editProduct.itemGroupId || editProduct.itemGroup?.id;
       if (!itemGroupId && editProduct.itemGroup) {
-        const groupKey = editProduct.itemGroup.key || editProduct.itemGroup.code;
+        const groupObj = typeof editProduct.itemGroup === 'object' ? editProduct.itemGroup : null;
+        const groupKey = groupObj
+          ? (groupObj.key || groupObj.code || groupObj.value || groupObj.id)
+          : editProduct.itemGroup;
+        const groupName = groupObj?.name;
+
         if (groupKey) {
           const matched = itemGroups.find(
-            (g: any) => g.code === groupKey || g.id === groupKey
+            (g: any) => g.id === groupKey || g.code === groupKey
           );
           if (matched) {
             itemGroupId = matched.id;
+          } else {
+            itemGroupId = groupKey;
+          }
+        }
+        if (!itemGroupId && groupName) {
+          const matchedByName = itemGroups.find(
+            (g: any) => g.name === groupName
+          );
+          if (matchedByName) {
+            itemGroupId = matchedByName.id;
           }
         }
       }
@@ -198,7 +213,7 @@ const ProductForm: React.FC = () => {
         itemType: editProduct.itemType || 'PRODUCT',
         productCategory: editProduct.productCategory || undefined,
         unit: editProduct.unit,
-        itemGroupId: editProduct.itemGroupId || undefined,
+        itemGroupId: itemGroupId || undefined,
         splittable: editProduct.splittable ?? false,
         unitSize: editProduct.unitSize ?? undefined,
         defaultSupplierId: defaultSupplierId || undefined,
@@ -243,7 +258,7 @@ const ProductForm: React.FC = () => {
       const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
       if (unitCost != null) {
         // Tính ngược: giaNhap = giaLe × qty
-        setGiaNhapInput(Math.round(Number(unitCost) * qty));
+        setGiaNhapInput(Math.round(Number(unitCost) * qty * 10000) / 10000);
       } else {
         setGiaNhapInput(null);
       }
@@ -259,7 +274,7 @@ const ProductForm: React.FC = () => {
     if (giaNhapInput == null) return; // chưa có giá nhập, không cần tính
     const defaultPkg = packagings.find(p => p.isDefault) ?? packagings[0] ?? null;
     const qty = (defaultPkg && defaultPkg.qtyPerPack > 0) ? Number(defaultPkg.qtyPerPack) : 1;
-    const newGiaLe = Math.round(giaNhapInput / qty);
+    const newGiaLe = Math.round((giaNhapInput / qty) * 10000) / 10000;
     form.setFieldValue('unitCost', newGiaLe > 0 ? newGiaLe : null);
   }, [packagings, form, giaNhapInput]);
 
@@ -340,11 +355,13 @@ const ProductForm: React.FC = () => {
         }
       }
       message.success(isEdit ? 'Cập nhật thành công' : 'Tạo mới thành công');
-      // Invalidate đầy đủ: cả list lẫn detail của item này
-      queryClient.invalidateQueries({ queryKey: ['items'] });
-      if (isEdit && id) {
-        queryClient.invalidateQueries({ queryKey: ['item', id] });
-      }
+      // Invalidate đầy đủ: cả list phân trang, list theo loại, all items lẫn detail của item này
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['items-paged'] }),
+        queryClient.invalidateQueries({ queryKey: ['items-all-type'] }),
+        queryClient.invalidateQueries({ queryKey: ['items'] }),
+        isEdit && id ? queryClient.invalidateQueries({ queryKey: ['item', id] }) : Promise.resolve(),
+      ]);
       navigate('/products');
     },
     onError: (error: any) => {
@@ -402,6 +419,8 @@ const ProductForm: React.FC = () => {
       await itemService.updatePackagings(id!, valid.map(({ _key, ...rest }) => rest));
       message.success('Đã lưu quy cách đóng gói ✓');
       queryClient.invalidateQueries({ queryKey: ['item', id] });
+      queryClient.invalidateQueries({ queryKey: ['items-paged'] });
+      queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
     } catch {
       message.error('Lưu đóng gói thất bại, vui lòng thử lại.');
     } finally {
@@ -498,6 +517,8 @@ const ProductForm: React.FC = () => {
                           setCurrentImageUrl(null);
                           message.success('Đã xóa ảnh');
                           queryClient.invalidateQueries({ queryKey: ['item', id] });
+                          queryClient.invalidateQueries({ queryKey: ['items-paged'] });
+                          queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
                         } catch {
                           // error handled by axiosClient
                         } finally {
@@ -542,6 +563,8 @@ const ProductForm: React.FC = () => {
                       setCurrentImageUrl(newUrl);
                       message.success('Đã tải ảnh lên thành công');
                       queryClient.invalidateQueries({ queryKey: ['item', id] });
+                      queryClient.invalidateQueries({ queryKey: ['items-paged'] });
+                      queryClient.invalidateQueries({ queryKey: ['items-all-type'] });
                     } catch {
                       // error handled by axiosClient
                     } finally {
@@ -745,17 +768,21 @@ const ProductForm: React.FC = () => {
                   ? defaultPkg.name.trim()
                   : baseUnitName;
 
-                const numFmt = (v: number | string | undefined) =>
-                  v !== undefined && v !== '' ? `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '';
+                const numFmt = (v: number | string | undefined) => {
+                  if (v === undefined || v === '') return '';
+                  const parts = `${v}`.split('.');
+                  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+                  return parts.join('.');
+                };
                 const numParse = (v: string | undefined) => v?.replace(/,/g, '') as any;
 
                 const giaLeDisplay = (giaNhapInput != null && giaNhapInput > 0)
-                  ? Math.round(giaNhapInput / qty)
+                  ? Math.round((giaNhapInput / qty) * 10000) / 10000
                   : null;
 
                 const onChangeGiaNhap = (val: number | null) => {
                   setGiaNhapInput(val);
-                  const giaLe = (val != null && val > 0) ? Math.round(val / qty) : null;
+                  const giaLe = (val != null && val > 0) ? Math.round((val / qty) * 10000) / 10000 : null;
                   form.setFieldValue('unitCost', giaLe);
                 };
 
@@ -1250,7 +1277,14 @@ const ProductForm: React.FC = () => {
                             rules={[{ required: true, message: 'Nhập số lượng' }]}
                             style={{ margin: 0 }}
                           >
-                            <InputNumber size="small" min={0.01} step={0.1} placeholder="Số lượng" style={{ width: '100%' }} />
+                            <InputNumber
+                              size="small"
+                              min={0.0001}
+                              step={0.0001}
+                              precision={4}
+                              placeholder="Số lượng"
+                              style={{ width: '100%' }}
+                            />
                           </Form.Item>
                         ),
                       },
