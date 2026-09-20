@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
   Table, Button, Input, Tag, Space, Typography, Modal, Alert,
-  message, Tooltip,
+  message, Tooltip, Popover, Checkbox,
 } from 'antd';
 import {
   PlusOutlined, SearchOutlined, EditOutlined,
   CheckOutlined, SyncOutlined, DollarOutlined,
   DeleteOutlined, FileExcelOutlined, CalculatorOutlined,
-  UndoOutlined, PictureOutlined,
+  UndoOutlined, PictureOutlined, SettingOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +22,30 @@ import { ItemUsageModal } from './ItemUsageModal';
 const { Title, Text } = Typography;
 
 const PAGE_SIZE = 20;
+
+export interface ColumnConfig {
+  key: string;
+  label: string;
+}
+
+export const ALL_TABLE_COLUMNS: ColumnConfig[] = [
+  { key: 'name', label: 'Tên hàng hoá' },
+  { key: 'itemType', label: 'Loại hàng hoá' },
+  { key: 'itemGroup', label: 'Nhóm mặt hàng' },
+  { key: 'supplier', label: 'Nhà cung cấp' },
+  { key: 'unit', label: 'Đơn vị tính' },
+  { key: 'importUnit', label: 'Đơn vị nhập' },
+  { key: 'conversion', label: 'Quy đổi đóng gói' },
+  { key: 'importPrice', label: 'Giá nhập' },
+  { key: 'unitCost', label: 'Giá vốn / Giá lẻ' },
+  { key: 'sellingPrice', label: 'Giá bán' },
+  { key: 'shelfDays', label: 'Hạn sử dụng' },
+  { key: 'splittable', label: 'Xuất lẻ' },
+  { key: 'minStockQuantity', label: 'Ngưỡng tồn kho' },
+  { key: 'restockQuantity', label: 'Mức nhập thêm' },
+  { key: 'recipe', label: 'Công thức' },
+  { key: 'approvalStatus', label: 'Trạng thái duyệt' },
+];
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = React.useState<T>(value);
@@ -55,6 +79,50 @@ const ITEM_TYPE_LABELS: Record<ItemType, { label: string; emoji: string; color: 
   PRODUCT: { label: 'Sản Phẩm', emoji: '🍰', color: '#16a34a' },
   SEMI_PRODUCT: { label: 'Bán Thành Phẩm', emoji: '🧁', color: '#7c3aed' },
   INGREDIENT: { label: 'Nguyên Liệu', emoji: '🥛', color: '#0369a1' },
+};
+
+export const DEFAULT_VISIBLE_COLUMNS: Record<TabKey, string[]> = {
+  PRODUCT: [
+    'itemGroup',
+    'name',
+    'unit',
+    'unitCost',
+    'sellingPrice',
+    'shelfDays',
+    'splittable',
+    'recipe',
+    'approvalStatus',
+  ],
+  SEMI_PRODUCT: [
+    'name',
+    'unit',
+    'unitCost',
+    'splittable',
+    'minStockQuantity',
+    'restockQuantity',
+    'recipe',
+    'approvalStatus',
+  ],
+  INGREDIENT: [
+    'name',
+    'supplier',
+    'unit',
+    'importUnit',
+    'conversion',
+    'importPrice',
+    'unitCost',
+    'splittable',
+    'minStockQuantity',
+    'restockQuantity',
+    'approvalStatus',
+  ],
+  DELETED: [
+    'itemType',
+    'name',
+    'unit',
+    'unitCost',
+    'approvalStatus',
+  ],
 };
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
@@ -222,6 +290,38 @@ const ProductList: React.FC = () => {
   const [recalcResult, setRecalcResult] = useState<RecipeApplyAllResponse | null>(null);
   const [usageItem, setUsageItem] = useState<Item | null>(null);
 
+  // ── Column Visibility State (⚙ Cấu hình cột hiển thị theo từng Tab) ────────
+  const [visibleColumnsByTab, setVisibleColumnsByTab] = useState<Record<TabKey, string[]>>(() => {
+    try {
+      const saved = localStorage.getItem('product_table_visible_columns_by_tab');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            PRODUCT: Array.isArray(parsed.PRODUCT) ? parsed.PRODUCT : DEFAULT_VISIBLE_COLUMNS.PRODUCT,
+            SEMI_PRODUCT: Array.isArray(parsed.SEMI_PRODUCT) ? parsed.SEMI_PRODUCT : DEFAULT_VISIBLE_COLUMNS.SEMI_PRODUCT,
+            INGREDIENT: Array.isArray(parsed.INGREDIENT) ? parsed.INGREDIENT : DEFAULT_VISIBLE_COLUMNS.INGREDIENT,
+            DELETED: Array.isArray(parsed.DELETED) ? parsed.DELETED : DEFAULT_VISIBLE_COLUMNS.DELETED,
+          };
+        }
+      }
+    } catch { }
+    return DEFAULT_VISIBLE_COLUMNS;
+  });
+
+  const currentVisibleColumns = visibleColumnsByTab[activeTab] || DEFAULT_VISIBLE_COLUMNS[activeTab] || [];
+
+  const handleUpdateVisibleColumns = (cols: string[]) => {
+    const updated = {
+      ...visibleColumnsByTab,
+      [activeTab]: cols,
+    };
+    setVisibleColumnsByTab(updated);
+    try {
+      localStorage.setItem('product_table_visible_columns_by_tab', JSON.stringify(updated));
+    } catch { }
+  };
+
   const debouncedSearch = useDebounce(search, 500);
 
   // ── Queries ────────────────────────────────────────────────────────────────
@@ -314,7 +414,6 @@ const ProductList: React.FC = () => {
 
   const isIngredient = activeTab === 'INGREDIENT';
   const showGroupColumn = activeTab === 'PRODUCT' && activeGroupCode === null;
-  const showRecipeColumn = activeTab === 'PRODUCT' || activeTab === 'SEMI_PRODUCT';
   const isPendingFilter = statusFilter === 'PENDING_APPROVAL' || statusFilter === 'PENDING';
 
   // ── Mutations ──────────────────────────────────────────────────────────────
@@ -583,10 +682,10 @@ const ProductList: React.FC = () => {
       const cleanFileName = activeTab === 'PRODUCT'
         ? 'San_Pham'
         : activeTab === 'SEMI_PRODUCT'
-        ? 'Ban_Thanh_Pham'
-        : activeTab === 'INGREDIENT'
-        ? 'Nguyen_Lieu'
-        : 'Da_Xoa';
+          ? 'Ban_Thanh_Pham'
+          : activeTab === 'INGREDIENT'
+            ? 'Nguyen_Lieu'
+            : 'Da_Xoa';
 
       XLSX.utils.book_append_sheet(workbook, worksheet, tabLabel);
       XLSX.writeFile(workbook, `${cleanFileName}.xlsx`);
@@ -631,18 +730,7 @@ const ProductList: React.FC = () => {
 
   const ingredientColumns: ColumnsType<Item> = [
     {
-      title: 'Nhà cung cấp',
-      key: 'supplier',
-      width: 130,
-      sorter: (a, b) => compareText(getSupplierName(a), getSupplierName(b)),
-      render: (_: unknown, record: Item) => {
-        const sup = record.defaultSupplier;
-        const supName = (sup as any)?.name || (sup as any)?.value || (typeof sup === 'string' ? sup : null);
-        return supName ? <Text style={{ color: '#0f172a' }}>{supName}</Text> : <Text type="secondary">—</Text>;
-      },
-    },
-    {
-      title: 'Tên',
+      title: 'Tên nguyên liệu',
       dataIndex: 'name',
       key: 'name',
       width: 220,
@@ -650,11 +738,22 @@ const ProductList: React.FC = () => {
       render: (v: string, record: Item) => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-               onClick={() => navigate(`/products/edit/${record.id}`)}>
-            <ProductImage src={record.imageUrl} size={64} alt={v} />
+            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            <ProductImage src={record.imageUrl} size={48} alt={v} />
             <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
           </div>
         );
+      },
+    },
+    {
+      title: 'Nhà cung cấp',
+      key: 'supplier',
+      width: 140,
+      sorter: (a, b) => compareText(getSupplierName(a), getSupplierName(b)),
+      render: (_: unknown, record: Item) => {
+        const sup = record.defaultSupplier;
+        const supName = (sup as any)?.name || (sup as any)?.value || (typeof sup === 'string' ? sup : null);
+        return supName ? <Text style={{ color: '#0f172a' }}>{supName}</Text> : <Text type="secondary">—</Text>;
       },
     },
     {
@@ -695,7 +794,7 @@ const ProductList: React.FC = () => {
         </div>
       ),
       key: 'conversion',
-      width: 150,
+      width: 140,
       align: 'center',
       sorter: (a, b) => compareNumber(defPkg(a)?.qtyPerPack, defPkg(b)?.qtyPerPack),
       render: (_: unknown, record: Item) => {
@@ -738,7 +837,7 @@ const ProductList: React.FC = () => {
           <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvị tính</div>
         </div>
       ),
-      key: 'retailPrice',
+      key: 'unitCost',
       width: 120,
       align: 'right' as const,
       sorter: (a, b) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
@@ -753,9 +852,62 @@ const ProductList: React.FC = () => {
       },
     },
     {
+      title: 'Xuất lẻ',
+      dataIndex: 'splittable',
+      key: 'splittable',
+      width: 90,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => (a.splittable === b.splittable ? 0 : a.splittable ? -1 : 1),
+      render: (v?: boolean) => (
+        v ? <Tag color="green">Có</Tag> : <Tag color="default">Không</Tag>
+      ),
+    },
+    {
+      title: 'Ngưỡng tồn',
+      dataIndex: 'minStockQuantity',
+      key: 'minStockQuantity',
+      width: 110,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.minStockQuantity, b.minStockQuantity),
+      render: (v: number | null | undefined, record: Item) => {
+        if (v == null) return <Text type="secondary">—</Text>;
+        return (
+          <span>
+            <strong>{Number(v).toLocaleString('vi-VN')}</strong> <Text type="secondary" style={{ fontSize: 11 }}>{record.unit}</Text>
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Mức nhập',
+      dataIndex: 'restockQuantity',
+      key: 'restockQuantity',
+      width: 110,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.restockQuantity, b.restockQuantity),
+      render: (v: number | null | undefined, record: Item) => {
+        if (v == null) return <Text type="secondary">—</Text>;
+        return (
+          <span>
+            <strong>{Number(v).toLocaleString('vi-VN')}</strong> <Text type="secondary" style={{ fontSize: 11 }}>{record.unit}</Text>
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'approvalStatus',
+      key: 'approvalStatus',
+      width: 110,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareText(a.approvalStatus, b.approvalStatus),
+      render: (v: string) => <StatusBadge status={v} />,
+    },
+    {
       title: '',
       key: 'action',
       width: 140,
+      fixed: 'right' as const,
       align: 'right',
       render: (_: unknown, record: Item) => {
         const canApprove = record.approvalStatus === 'DRAFT'
@@ -797,11 +949,10 @@ const ProductList: React.FC = () => {
   ];
 
   const productColumns: ColumnsType<Item> = [
-    ...(showGroupColumn ? [{
+    {
       title: 'Nhóm',
       key: 'itemGroup',
       width: 140,
-      responsive: ['md' as const],
       sorter: (a: Item, b: Item) => compareText(a.itemGroup?.name || a.itemGroup?.value, b.itemGroup?.name || b.itemGroup?.value),
       render: (_: unknown, record: Item) => {
         const groupName = record.itemGroup?.name || record.itemGroup?.value;
@@ -809,38 +960,42 @@ const ProductList: React.FC = () => {
           ? <Text style={{ color: '#2563eb', fontWeight: 500 }}>{groupName}</Text>
           : <Text type="secondary">—</Text>;
       },
-    }] : []),
+    },
     {
       title: 'Tên',
       dataIndex: 'name',
       key: 'name',
+      width: 220,
       sorter: (a, b) => compareText(a.name, b.name),
       render: (v: string, record: Item) => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-               onClick={() => navigate(`/products/edit/${record.id}`)}>
-            <ProductImage src={record.imageUrl} size={64} alt={v} />
-            <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 200, fontWeight: 500 }}>{v}</Text>
+            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            <ProductImage src={record.imageUrl} size={48} alt={v} />
+            <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
           </div>
         );
       },
     },
     {
-      title: 'Đơn vị',
+      title: 'Đơn vị tính',
       dataIndex: 'unit',
       key: 'unit',
-      width: 80,
+      width: 90,
       align: 'center',
-      responsive: ['sm' as const],
       sorter: (a, b) => compareText(a.unit, b.unit),
       render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
     },
-    ...(isSuperAdmin ? [{
-      title: 'Giá vốn',
+    {
+      title: (
+        <div style={{ textAlign: 'right' }}>
+          <div>Giá vốn</div>
+          <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvt</div>
+        </div>
+      ),
       key: 'unitCost',
-      width: 130,
+      width: 120,
       align: 'right' as const,
-      responsive: ['md' as const],
       sorter: (a: Item, b: Item) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
       render: (_: unknown, record: any) => {
         const val = record.unitCost ?? record.lastPrice;
@@ -851,8 +1006,52 @@ const ProductList: React.FC = () => {
           </Text>
         );
       },
-    }] : []),
-    ...(showRecipeColumn ? [{
+    },
+    {
+      title: (
+        <div style={{ textAlign: 'right' }}>
+          <div>Giá bán</div>
+          <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvt</div>
+        </div>
+      ),
+      key: 'sellingPrice',
+      width: 120,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.sellingPrice, b.sellingPrice),
+      render: (_: unknown, record: any) => {
+        if (record.sellingPrice == null) return <Text type="secondary">—</Text>;
+        return (
+          <Text style={{ fontWeight: 500, color: '#16a34a' }}>
+            {fmtPrice(record.sellingPrice)}
+          </Text>
+        );
+      },
+    },
+    {
+      title: 'Hạn SD',
+      dataIndex: 'shelfDays',
+      key: 'shelfDays',
+      width: 100,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.shelfDays, b.shelfDays),
+      render: (v?: number | null) => {
+        if (v === undefined || v === null) return <Text type="secondary">—</Text>;
+        if (v === 0) return <Tag color="orange">Trong ngày</Tag>;
+        return <Text>{v} ngày</Text>;
+      },
+    },
+    {
+      title: 'Xuất lẻ',
+      dataIndex: 'splittable',
+      key: 'splittable',
+      width: 90,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => (a.splittable === b.splittable ? 0 : a.splittable ? -1 : 1),
+      render: (v?: boolean) => (
+        v ? <Tag color="green">Có</Tag> : <Tag color="default">Không</Tag>
+      ),
+    },
+    {
       title: 'Công thức',
       key: 'recipe',
       width: 100,
@@ -886,17 +1085,26 @@ const ProductList: React.FC = () => {
           </Tooltip>
         );
       },
-    }] : []),
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'approvalStatus',
+      key: 'approvalStatus',
+      width: 110,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareText(a.approvalStatus, b.approvalStatus),
+      render: (v: string) => <StatusBadge status={v} />,
+    },
     {
       title: '',
       key: 'action',
-      width: 200,
+      width: 150,
+      fixed: 'right' as const,
       align: 'right',
       render: (_: unknown, record: Item) => {
         const canApprove = record.approvalStatus === 'DRAFT'
           || record.approvalStatus === 'PENDING_APPROVAL'
           || record.approvalStatus === 'PENDING';
-        const isProductOrSemi = activeTab === 'PRODUCT' || activeTab === 'SEMI_PRODUCT';
         const isApproved = record.approvalStatus === 'APPROVED';
 
         return (
@@ -908,7 +1116,7 @@ const ProductList: React.FC = () => {
             >
               Sửa
             </Button>
-            {isProductOrSemi && isApproved && (
+            {isApproved && (
               <Tooltip title="Tính giá cost">
                 <Button
                   size="small"
@@ -918,15 +1126,196 @@ const ProductList: React.FC = () => {
                 />
               </Tooltip>
             )}
-            {activeTab === 'SEMI_PRODUCT' && (
-              <Tooltip title="Xem SP đang dùng BTP này">
+            {canApprove && (
+              <Button
+                size="small"
+                type="primary"
+                icon={<CheckOutlined />}
+                style={{ background: '#16a34a', borderColor: '#16a34a' }}
+                loading={approveMut.isPending && approveMut.variables === record.id}
+                onClick={() => handleApprove(record)}
+              >
+                Approve
+              </Button>
+            )}
+          </Space>
+        );
+      },
+    },
+  ];
+
+  const semiProductColumns: ColumnsType<Item> = [
+    {
+      title: 'Tên bán thành phẩm',
+      dataIndex: 'name',
+      key: 'name',
+      width: 220,
+      sorter: (a, b) => compareText(a.name, b.name),
+      render: (v: string, record: Item) => {
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            <ProductImage src={record.imageUrl} size={48} alt={v} />
+            <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
+          </div>
+        );
+      },
+    },
+    {
+      title: 'Đơn vị tính',
+      dataIndex: 'unit',
+      key: 'unit',
+      width: 90,
+      align: 'center',
+      sorter: (a, b) => compareText(a.unit, b.unit),
+      render: (v: string) => <Tag style={{ margin: 0 }}>{v}</Tag>,
+    },
+    {
+      title: (
+        <div style={{ textAlign: 'right' }}>
+          <div>Giá vốn</div>
+          <div style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>đ / đvt</div>
+        </div>
+      ),
+      key: 'unitCost',
+      width: 120,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
+      render: (_: unknown, record: any) => {
+        const val = record.unitCost ?? record.lastPrice;
+        if (val == null) return <Text type="secondary">—</Text>;
+        return (
+          <Text style={{ fontWeight: 500, color: '#b45309' }}>
+            {fmtPrice(val)}
+          </Text>
+        );
+      },
+    },
+    {
+      title: 'Xuất lẻ',
+      dataIndex: 'splittable',
+      key: 'splittable',
+      width: 90,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => (a.splittable === b.splittable ? 0 : a.splittable ? -1 : 1),
+      render: (v?: boolean) => (
+        v ? <Tag color="green">Có</Tag> : <Tag color="default">Không</Tag>
+      ),
+    },
+    {
+      title: 'Ngưỡng tồn',
+      dataIndex: 'minStockQuantity',
+      key: 'minStockQuantity',
+      width: 110,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.minStockQuantity, b.minStockQuantity),
+      render: (v: number | null | undefined, record: Item) => {
+        if (v == null) return <Text type="secondary">—</Text>;
+        return (
+          <span>
+            <strong>{Number(v).toLocaleString('vi-VN')}</strong> <Text type="secondary" style={{ fontSize: 11 }}>{record.unit}</Text>
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Mức nhập',
+      dataIndex: 'restockQuantity',
+      key: 'restockQuantity',
+      width: 110,
+      align: 'right' as const,
+      sorter: (a: Item, b: Item) => compareNumber(a.restockQuantity, b.restockQuantity),
+      render: (v: number | null | undefined, record: Item) => {
+        if (v == null) return <Text type="secondary">—</Text>;
+        return (
+          <span>
+            <strong>{Number(v).toLocaleString('vi-VN')}</strong> <Text type="secondary" style={{ fontSize: 11 }}>{record.unit}</Text>
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Công thức',
+      key: 'recipe',
+      width: 100,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareNumber(getRecipeScore(a), getRecipeScore(b)),
+      render: (_: unknown, record: Item) => {
+        const recipe = record.recipe || (record as any).activeRecipe;
+        if (!recipe) {
+          return (
+            <Tooltip title="Chưa có công thức">
+              <span style={{ color: '#ef4444', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+                ✗
+              </span>
+            </Tooltip>
+          );
+        }
+        if ((recipe as any).active === false) {
+          return (
+            <Tooltip title="Có công thức nhưng chưa kích hoạt">
+              <span style={{ color: '#d97706', fontSize: 15, fontWeight: 700, cursor: 'default' }}>
+                ⚠
+              </span>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tooltip title="Công thức đang hoạt động">
+            <span style={{ color: '#16a34a', fontSize: 16, fontWeight: 700, cursor: 'default' }}>
+              ✓
+            </span>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'approvalStatus',
+      key: 'approvalStatus',
+      width: 110,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareText(a.approvalStatus, b.approvalStatus),
+      render: (v: string) => <StatusBadge status={v} />,
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 180,
+      fixed: 'right' as const,
+      align: 'right',
+      render: (_: unknown, record: Item) => {
+        const canApprove = record.approvalStatus === 'DRAFT'
+          || record.approvalStatus === 'PENDING_APPROVAL'
+          || record.approvalStatus === 'PENDING';
+        const isApproved = record.approvalStatus === 'APPROVED';
+
+        return (
+          <Space size={4}>
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => navigate(`/products/edit/${record.id}`)}
+            >
+              Sửa
+            </Button>
+            {isApproved && (
+              <Tooltip title="Tính giá cost">
                 <Button
                   size="small"
-                  icon={<span>🔍</span>}
-                  onClick={() => setUsageItem(record)}
+                  icon={<DollarOutlined />}
+                  style={{ color: '#0ea5e9', borderColor: '#0ea5e9' }}
+                  onClick={() => setCostModalItem(record)}
                 />
               </Tooltip>
             )}
+            <Tooltip title="Xem SP đang dùng BTP này">
+              <Button
+                size="small"
+                icon={<span>🔍</span>}
+                onClick={() => setUsageItem(record)}
+              />
+            </Tooltip>
             {canApprove && (
               <Button
                 size="small"
@@ -958,17 +1347,10 @@ const ProductList: React.FC = () => {
       },
     },
     {
-      title: 'Mã',
-      dataIndex: 'code',
-      key: 'code',
-      width: 110,
-      sorter: (a, b) => compareText(a.code, b.code),
-      render: (v: string) => <code>{v}</code>,
-    },
-    {
       title: 'Tên',
       dataIndex: 'name',
       key: 'name',
+      width: 200,
       sorter: (a, b) => compareText(a.name, b.name),
       render: (v: string, record: Item) => {
         return (
@@ -991,7 +1373,7 @@ const ProductList: React.FC = () => {
     {
       title: 'Giá vốn / Giá lẻ',
       key: 'unitCost',
-      width: 140,
+      width: 130,
       align: 'right',
       sorter: (a, b) => compareNumber(a.unitCost ?? a.lastPrice, b.unitCost ?? b.lastPrice),
       render: (_: unknown, record: Item) => {
@@ -1000,9 +1382,19 @@ const ProductList: React.FC = () => {
       },
     },
     {
+      title: 'Trạng thái',
+      dataIndex: 'approvalStatus',
+      key: 'approvalStatus',
+      width: 110,
+      align: 'center' as const,
+      sorter: (a: Item, b: Item) => compareText(a.approvalStatus, b.approvalStatus),
+      render: (v: string) => <StatusBadge status={v} />,
+    },
+    {
       title: '',
       key: 'action',
       width: 130,
+      fixed: 'right' as const,
       align: 'right',
       render: (_: unknown, record: Item) => (
         <Button
@@ -1029,9 +1421,31 @@ const ProductList: React.FC = () => {
 
   const columns = isDeleted
     ? deletedColumns
-    : isIngredient
-    ? ingredientColumns
-    : productColumns;
+    : activeTab === 'INGREDIENT'
+      ? ingredientColumns
+      : activeTab === 'SEMI_PRODUCT'
+        ? semiProductColumns
+        : productColumns;
+
+  const visibleTableColumns = React.useMemo(() => {
+    return columns.filter((col) => {
+      if (!col.key || col.key === 'action') return true;
+      return currentVisibleColumns.includes(col.key as string);
+    });
+  }, [columns, currentVisibleColumns]);
+
+  const currentTabColumnOptions = React.useMemo(() => {
+    return columns
+      .filter((c) => c.key && c.key !== 'action')
+      .map((c) => {
+        const found = ALL_TABLE_COLUMNS.find((ac) => ac.key === c.key);
+        const titleText = typeof c.title === 'string' ? c.title : undefined;
+        return {
+          key: c.key as string,
+          label: found?.label || titleText || (c.key as string),
+        };
+      });
+  }, [columns]);
 
   // ── Pagination info ────────────────────────────────────────────────────────
 
@@ -1226,6 +1640,40 @@ const ProductList: React.FC = () => {
 
           {/* Right: Export & Delete buttons */}
           <Space>
+            <Popover
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontWeight: 600 }}>Cột hiển thị</span>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0 }}
+                    onClick={() => handleUpdateVisibleColumns(ALL_TABLE_COLUMNS.map((c) => c.key))}
+                  >
+                    Hiện tất cả
+                  </Button>
+                </div>
+              }
+              trigger="click"
+              placement="bottomRight"
+              content={
+                <div style={{ maxWidth: 260, maxHeight: 360, overflowY: 'auto' }}>
+                  <Checkbox.Group
+                    value={currentVisibleColumns}
+                    onChange={(vals) => handleUpdateVisibleColumns(vals as string[])}
+                    style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+                  >
+                    {currentTabColumnOptions.map((col) => (
+                      <Checkbox key={col.key} value={col.key}>
+                        {col.label}
+                      </Checkbox>
+                    ))}
+                  </Checkbox.Group>
+                </div>
+              }
+            >
+              <Button icon={<SettingOutlined />}>Cột hiển thị</Button>
+            </Popover>
             <Button
               icon={<FileExcelOutlined />}
               style={{ color: '#16a34a', borderColor: '#16a34a' }}
@@ -1286,14 +1734,14 @@ const ProductList: React.FC = () => {
                 },
               }
             } : {})}
-            columns={columns}
+            columns={visibleTableColumns}
             dataSource={displayItems}
             rowKey="id"
             loading={isLoading}
             size="small"
             pagination={false}
             bordered={false}
-            scroll={{ x: isIngredient ? 1020 : 750 }}
+            scroll={{ x: 'max-content' }}
             style={{ fontSize: 13 }}
             onRow={(record) => ({
               style: { cursor: 'default' },
