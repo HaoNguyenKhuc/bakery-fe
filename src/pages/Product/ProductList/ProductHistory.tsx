@@ -1,7 +1,7 @@
 import React from 'react';
 import { Timeline, Typography, Alert, Button, Card, Space, Divider, Tag } from 'antd';
 import { ArrowLeftOutlined, HistoryOutlined } from '@ant-design/icons';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { itemService } from '../../../api/services';
@@ -12,6 +12,15 @@ const { Title, Text } = Typography;
 const ProductHistory: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleBack = () => {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else {
+      navigate('/products');
+    }
+  };
 
   const { data: history, isLoading } = useQuery({
     queryKey: ['product-history', id],
@@ -26,7 +35,7 @@ const ProductHistory: React.FC = () => {
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <Space>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/products')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
             Danh Sách Hàng Hoá
           </Button>
           <Divider type="vertical" />

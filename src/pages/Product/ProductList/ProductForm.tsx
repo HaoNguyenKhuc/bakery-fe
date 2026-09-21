@@ -7,7 +7,7 @@ import {
   PlusOutlined, ArrowLeftOutlined, SaveOutlined,
   AppstoreOutlined, DeleteOutlined, UploadOutlined, PictureOutlined
 } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { itemService, itemGroupService, supplierService, recipeService } from '../../../api/services';
 import unitService from '../../../api/services/unitService';
@@ -26,10 +26,19 @@ const extractArray = (data: any): any[] => {
 
 const ProductForm: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const isEdit = !!id;
   const [form] = Form.useForm<ProductRequest>();
   const queryClient = useQueryClient();
+
+  const handleBack = () => {
+    if (location.state?.from) {
+      navigate(location.state.from);
+    } else {
+      navigate('/products');
+    }
+  };
 
   // ── Packaging State ───────────────────────────────────────────────────────────
   /** Row trong bảng đóng gói — bao gồm _key để dùng làm React key */
@@ -362,7 +371,7 @@ const ProductForm: React.FC = () => {
         queryClient.invalidateQueries({ queryKey: ['items'] }),
         isEdit && id ? queryClient.invalidateQueries({ queryKey: ['item', id] }) : Promise.resolve(),
       ]);
-      navigate('/products');
+      handleBack();
     },
     onError: (error: any) => {
       message.error(error.message || (isEdit ? 'Cập nhật thất bại' : 'Tạo mới thất bại'));
@@ -437,7 +446,7 @@ const ProductForm: React.FC = () => {
       {/* Page Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <Space style={{ flexWrap: 'wrap' }}>
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/products')}>
+          <Button icon={<ArrowLeftOutlined />} onClick={handleBack}>
             Danh Sách Hàng Hoá
           </Button>
           <Divider type="vertical" className="hide-on-mobile" />
@@ -450,7 +459,7 @@ const ProductForm: React.FC = () => {
           )}
         </Space>
         <Space className="mobile-sticky-footer">
-          <Button onClick={() => navigate('/products')}>Huỷ</Button>
+          <Button onClick={handleBack}>Huỷ</Button>
           <Button
             type="primary"
             icon={<SaveOutlined />}
@@ -1420,6 +1429,7 @@ const ProductForm: React.FC = () => {
 
 const ItemUsageTable: React.FC<{ itemId: string }> = ({ itemId }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: usageList = [], isLoading, isError } = useQuery({
     queryKey: ['item-usage', itemId],
     queryFn: () => recipeService.getUsageByItem(itemId),
@@ -1475,7 +1485,9 @@ const ItemUsageTable: React.FC<{ itemId: string }> = ({ itemId }) => {
         <Button
           size="small"
           onClick={() => {
-            navigate(`/products/edit/${r.productId}`);
+            navigate(`/products/edit/${r.productId}`, {
+              state: { from: location.state?.from || '/products' }
+            });
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
         >

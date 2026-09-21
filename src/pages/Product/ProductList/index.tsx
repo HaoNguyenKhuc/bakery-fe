@@ -10,7 +10,7 @@ import {
   UndoOutlined, PictureOutlined, SettingOutlined,
 } from '@ant-design/icons';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import type { ColumnsType } from 'antd/es/table';
 import * as XLSX from 'xlsx';
 import { itemService, itemGroupService, recipeService } from '../../../api/services';
@@ -275,12 +275,44 @@ const ProductList: React.FC = () => {
   const navigate = useNavigate();
   const isSuperAdmin = useAuthStore((s) => s.isSuperAdmin());
 
-  // ── State ──────────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState<TabKey>('PRODUCT');
-  const [activeGroupCode, setActiveGroupCode] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
+  // ── URL & Navigation State ─────────────────────────────────────────────────
+  const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+
+  const rawTab = searchParams.get('tab');
+  const activeTab: TabKey = (rawTab === 'SEMI_PRODUCT' || rawTab === 'INGREDIENT' || rawTab === 'DELETED') ? rawTab : 'PRODUCT';
+  const activeGroupCode = searchParams.get('group') || null;
+  const statusFilter = searchParams.get('status') || null;
+  const rawPage = parseInt(searchParams.get('page') || '1', 10);
+  const page = isNaN(rawPage) || rawPage < 1 ? 0 : rawPage - 1;
+
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
+  const debouncedSearch = useDebounce(search, 500);
+
+  // Sync debouncedSearch to URL query param
+  React.useEffect(() => {
+    const currentQ = searchParams.get('q') || '';
+    if (debouncedSearch.trim() !== currentQ) {
+      setSearchParams(prev => {
+        const next = new URLSearchParams(prev);
+        if (debouncedSearch.trim()) {
+          next.set('q', debouncedSearch.trim());
+        } else {
+          next.delete('q');
+        }
+        next.delete('page');
+        return next;
+      }, { replace: true });
+    }
+  }, [debouncedSearch]);
+
+  // Keep search input synced if q changes in URL externally (e.g. browser back/forward)
+  React.useEffect(() => {
+    const urlQ = searchParams.get('q') || '';
+    if (urlQ !== search) {
+      setSearch(urlQ);
+    }
+  }, [searchParams.get('q')]);
   const [costModalItem, setCostModalItem] = useState<Item | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [selectedRows, setSelectedRows] = useState<Item[]>([]);
@@ -321,8 +353,6 @@ const ProductList: React.FC = () => {
       localStorage.setItem('product_table_visible_columns_by_tab', JSON.stringify(updated));
     } catch { }
   };
-
-  const debouncedSearch = useDebounce(search, 500);
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -697,23 +727,70 @@ const ProductList: React.FC = () => {
     }
   };
 
-  // ── Switching ──────────────────────────────────────────────────────────────
+  // ── Switching & Navigation ─────────────────────────────────────────────────
 
   const switchTab = (tab: TabKey) => {
-    setActiveTab(tab);
-    setActiveGroupCode(null);
-    setStatusFilter(null);
-    setPage(0);
+    setSearchParams(() => {
+      const next = new URLSearchParams();
+      if (tab !== 'PRODUCT') {
+        next.set('tab', tab);
+      }
+      return next;
+    });
     setSearch('');
     setSelectedRowKeys([]);
     setSelectedRows([]);
   };
 
   const switchGroup = (code: string | null) => {
-    setActiveGroupCode(code);
-    setPage(0);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (code) {
+        next.set('group', code);
+      } else {
+        next.delete('group');
+      }
+      next.delete('page');
+      return next;
+    });
     setSelectedRowKeys([]);
     setSelectedRows([]);
+  };
+
+  const handleStatusFilterChange = (key: string | null) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      const current = next.get('status');
+      if (!key || current === key) {
+        next.delete('status');
+      } else {
+        next.set('status', key);
+      }
+      next.delete('page');
+      return next;
+    });
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (newPage > 0) {
+        next.set('page', String(newPage + 1));
+      } else {
+        next.delete('page');
+      }
+      return next;
+    });
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
+  };
+
+  const goToEdit = (itemId: string | number) => {
+    navigate(`/products/edit/${itemId}`, {
+      state: { from: `${location.pathname}${location.search}` }
+    });
   };
 
   const handleRefresh = () => {
@@ -738,7 +815,7 @@ const ProductList: React.FC = () => {
       render: (v: string, record: Item) => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            onClick={() => goToEdit(record.id)}>
             <ProductImage src={record.imageUrl} size={48} alt={v} />
             <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
           </div>
@@ -919,7 +996,7 @@ const ProductList: React.FC = () => {
             <Button
               size="small"
               icon={<EditOutlined />}
-              onClick={() => navigate(`/products/edit/${record.id}`)}
+              onClick={() => goToEdit(record.id)}
             >
               Sửa
             </Button>
@@ -970,7 +1047,7 @@ const ProductList: React.FC = () => {
       render: (v: string, record: Item) => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            onClick={() => goToEdit(record.id)}>
             <ProductImage src={record.imageUrl} size={48} alt={v} />
             <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
           </div>
@@ -1112,7 +1189,7 @@ const ProductList: React.FC = () => {
             <Button
               size="small"
               icon={<EditOutlined />}
-              onClick={() => navigate(`/products/edit/${record.id}`)}
+              onClick={() => goToEdit(record.id)}
             >
               Sửa
             </Button>
@@ -1154,7 +1231,7 @@ const ProductList: React.FC = () => {
       render: (v: string, record: Item) => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-            onClick={() => navigate(`/products/edit/${record.id}`)}>
+            onClick={() => goToEdit(record.id)}>
             <ProductImage src={record.imageUrl} size={48} alt={v} />
             <Text ellipsis={{ tooltip: v }} style={{ color: '#1d4ed8', maxWidth: 160, fontWeight: 500 }}>{v}</Text>
           </div>
@@ -1295,7 +1372,7 @@ const ProductList: React.FC = () => {
             <Button
               size="small"
               icon={<EditOutlined />}
-              onClick={() => navigate(`/products/edit/${record.id}`)}
+              onClick={() => goToEdit(record.id)}
             >
               Sửa
             </Button>
@@ -1474,7 +1551,7 @@ const ProductList: React.FC = () => {
           <Button icon={<SyncOutlined />} onClick={handleRefresh} loading={isLoading}>
             Làm mới
           </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/products/create')}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/products/create', { state: { from: `${location.pathname}${location.search}` } })}>
             Tạo mới
           </Button>
         </Space>
@@ -1579,7 +1656,6 @@ const ProductList: React.FC = () => {
               value={search}
               onChange={e => {
                 setSearch(e.target.value);
-                setPage(0);
                 setSelectedRowKeys([]);
                 setSelectedRows([]);
               }}
@@ -1594,12 +1670,7 @@ const ProductList: React.FC = () => {
                   return (
                     <span
                       key={key}
-                      onClick={() => {
-                        setStatusFilter(active ? null : key);
-                        setPage(0);
-                        setSelectedRowKeys([]);
-                        setSelectedRows([]);
-                      }}
+                      onClick={() => handleStatusFilterChange(key)}
                       style={{
                         padding: '3px 12px',
                         borderRadius: 12,
@@ -1619,12 +1690,7 @@ const ProductList: React.FC = () => {
                 })}
                 {statusFilter && (
                   <span
-                    onClick={() => {
-                      setStatusFilter(null);
-                      setPage(0);
-                      setSelectedRowKeys([]);
-                      setSelectedRows([]);
-                    }}
+                    onClick={() => handleStatusFilterChange(null)}
                     style={{
                       padding: '3px 10px', borderRadius: 12, fontSize: 12,
                       cursor: 'pointer', color: '#64748b', background: '#f1f5f9',
@@ -1763,7 +1829,7 @@ const ProductList: React.FC = () => {
             <Button
               size="small"
               disabled={page === 0}
-              onClick={() => setPage(p => p - 1)}
+              onClick={() => handlePageChange(page - 1)}
             >
               ‹
             </Button>
@@ -1771,7 +1837,7 @@ const ProductList: React.FC = () => {
             <Button
               size="small"
               disabled={page >= totalPages - 1}
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => handlePageChange(page + 1)}
             >
               ›
             </Button>
