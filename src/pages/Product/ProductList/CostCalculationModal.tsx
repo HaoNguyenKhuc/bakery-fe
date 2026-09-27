@@ -66,6 +66,8 @@ export const CostCalculationModal: React.FC<CostCalculationModalProps> = ({
     queryKey: ['recipe-cost', itemId],
     queryFn: () => recipeService.calculateCost(itemId!),
     enabled: open && !!itemId,
+    staleTime: 0,   // Luôn coi data là stale → refetch mỗi lần modal mở
+    gcTime: 0,      // Không giữ cache sau khi modal đóng/unmount
   });
 
   const applyMutation = useMutation({

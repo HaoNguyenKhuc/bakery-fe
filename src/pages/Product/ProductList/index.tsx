@@ -329,12 +329,23 @@ const ProductList: React.FC = () => {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed && typeof parsed === 'object') {
-          return {
-            PRODUCT: Array.isArray(parsed.PRODUCT) ? parsed.PRODUCT : DEFAULT_VISIBLE_COLUMNS.PRODUCT,
+          // Migration: đảm bảo cột 'sellingPrice' luôn hiển thị ở tab PRODUCT
+          const productCols = Array.isArray(parsed.PRODUCT) ? parsed.PRODUCT : DEFAULT_VISIBLE_COLUMNS.PRODUCT;
+          const migratedProduct = productCols.includes('sellingPrice')
+            ? productCols
+            : [...productCols, 'sellingPrice'];
+
+          const result = {
+            PRODUCT: migratedProduct,
             SEMI_PRODUCT: Array.isArray(parsed.SEMI_PRODUCT) ? parsed.SEMI_PRODUCT : DEFAULT_VISIBLE_COLUMNS.SEMI_PRODUCT,
             INGREDIENT: Array.isArray(parsed.INGREDIENT) ? parsed.INGREDIENT : DEFAULT_VISIBLE_COLUMNS.INGREDIENT,
             DELETED: Array.isArray(parsed.DELETED) ? parsed.DELETED : DEFAULT_VISIBLE_COLUMNS.DELETED,
           };
+          // Lưu lại nếu đã migrate
+          if (!productCols.includes('sellingPrice')) {
+            try { localStorage.setItem('product_table_visible_columns_by_tab', JSON.stringify(result)); } catch { }
+          }
+          return result;
         }
       }
     } catch { }
@@ -1079,7 +1090,7 @@ const ProductList: React.FC = () => {
         if (val == null) return <Text type="secondary">—</Text>;
         return (
           <Text style={{ fontWeight: 500, color: '#b45309' }}>
-            {fmtPrice(val)}
+            {fmtExactPrice(val)}
           </Text>
         );
       },
@@ -1263,7 +1274,7 @@ const ProductList: React.FC = () => {
         if (val == null) return <Text type="secondary">—</Text>;
         return (
           <Text style={{ fontWeight: 500, color: '#b45309' }}>
-            {fmtPrice(val)}
+            {fmtExactPrice(val)}
           </Text>
         );
       },
